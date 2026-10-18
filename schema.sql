@@ -1,18 +1,16 @@
 -- Forma Studio schema for Supabase Postgres.
 -- Run in Supabase SQL Editor before setting SUPABASE_URL and SUPABASE_SECRET_KEY.
 -- SUPABASE_SERVICE_ROLE_KEY (legacy JWT) is also supported for existing deployments.
--- FastAPI uses the server Secret key for data access and Supabase Auth for credential verification. Keep all keys out of browser code.
+-- FastAPI uses the server Secret key for data access and Storage. App login is independently configured; no Supabase Auth user is needed.
 
 create extension if not exists pgcrypto;
 
 create table if not exists public.app_users (
   id uuid primary key default gen_random_uuid(),
-  auth_user_id uuid unique references auth.users(id) on delete cascade,
   username text unique not null,
   email text unique not null,
   display_name text not null,
   role text not null check (role in ('admin', 'client')),
-  password_hash text,
   created_at timestamptz not null default now()
 );
 

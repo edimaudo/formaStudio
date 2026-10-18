@@ -12,7 +12,7 @@
         <div class="label-row"><label for="password">Password</label><button class="text-button" type="button" data-toggle-password="password">Show</button></div><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
         <button class="button button-primary button-full button-large" type="submit">Continue <span aria-hidden="true">→</span></button>
       </form>
-      {# Supabase Auth UI placeholder — intentionally commented out. The existing branded form remains the only login UI; FastAPI verifies credentials through Supabase Auth on the server. Do not render a provider-specific widget here unless the product requirements change. #}
+      {# Future Supabase Auth UI placeholder — intentionally commented out. The existing branded username/password form is the only login UI. Application credentials are validated from server-side app configuration; no Supabase Auth or database lookup is made for sign-in. Do not render or activate Supabase-specific login UI unless the product requirements change. #}
       <p class="login-footnote">Need access? Ask your studio administrator to set up your account.</p>
     </section>
   </div>

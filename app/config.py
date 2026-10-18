@@ -165,19 +165,20 @@ def validate_supabase_auth_settings(
             "sb_publishable_… key OR SUPABASE_ANON_KEY for the legacy anon JWT. Do not set both."
         )
     key = publishable_key or anon_key
-    if bool(project_url) != bool(key):
-        raise RuntimeError(
-            "Supabase Auth configuration is incomplete. With SUPABASE_URL, set "
-            "SUPABASE_PUBLISHABLE_KEY (recommended) or SUPABASE_ANON_KEY; when using local "
-            "storage, leave all Supabase URL and key variables empty."
-        )
+    # Supabase Auth is not used to sign users into Forma Studio. The branded login
+    # validates application credentials locally; this optional key only enables
+    # email OTP for email-restricted brand kits and Legal Kit access requests.
+    # Missing Auth credentials must never prevent the main app from starting.
     if not project_url and not key:
-        if app_env == "production":
-            raise RuntimeError(
-                "Supabase Auth is required in production. Set SUPABASE_URL and "
-                "SUPABASE_PUBLISHABLE_KEY (recommended), or the legacy SUPABASE_ANON_KEY."
-            )
         return ""
+    if project_url:
+        project_url = validate_base_url("SUPABASE_URL", project_url, allow_local_http=True)
+    if not key:
+        return ""
+    if not project_url:
+        raise RuntimeError(
+            "Set SUPABASE_URL when configuring optional email verification through Supabase Auth."
+        )
 
     if publishable_key:
         if publishable_key.startswith("sb_secret_"):

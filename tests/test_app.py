@@ -94,7 +94,7 @@ def test_approved_legal_request_can_reverify_without_losing_approval() -> None:
     if store.supabase_enabled:
         return  # This focused unit test exercises the in-memory data layer only.
     isolated = DataStore()
-    entry = next(row for row in isolated.legal_entries if row["standard"] == "GDPR" and row["owner_id"] == "local-admin")
+    entry = next(row for row in isolated.legal_entries if row["standard"] == "GDPR" and row["owner_id"] == isolated.users[0]["id"])
     approval = isolated.create_legal_request(entry, "partner@example.com", "Review Partner", "Review the policy")
     isolated.resolve_legal_request(approval["id"], "approved")
 
@@ -150,33 +150,31 @@ def test_supabase_headers_support_new_secret_and_legacy_jwt(monkeypatch) -> None
     assert legacy_headers["Authorization"] == "Bearer eyJlegacy.example.jwt"
 
 
-def test_supabase_auth_password_uses_existing_username_login_backend(monkeypatch):
+def test_app_login_does_not_call_supabase_auth_or_query_users_table(monkeypatch):
     from app import main as main_module
 
-    calls = {}
-
-    class FakeResponse:
-        status_code = 200
-
-        @staticmethod
-        def json():
-            return {"user": {"id": "auth-user-id", "email": "client@example.org"}}
-
-    def fake_post(url, **kwargs):
-        calls["url"] = url
-        calls["headers"] = kwargs["headers"]
-        calls["json"] = kwargs["json"]
-        return FakeResponse()
-
+    # Simulate Supabase being configured for workspace persistence. Authentication itself
+    # must use only the app-configured account list; no database/Auth request is allowed.
     monkeypatch.setattr(main_module, "SUPABASE_URL", "https://project-ref.supabase.co")
-    monkeypatch.setattr(main_module, "SUPABASE_AUTH_KEY", "sb_publishable_unit-test")
-    monkeypatch.setattr(main_module.httpx, "post", fake_post)
-    profile = {"auth_user_id": "auth-user-id", "email": "client@example.org"}
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit-test")
+    monkeypatch.setattr(main_module, "SUPABASE_AUTH_KEY", "")
 
-    assert main_module.verify_supabase_password(profile, "a-strong-password")
-    assert calls["url"] == "https://project-ref.supabase.co/auth/v1/token?grant_type=password"
-    assert calls["headers"]["apikey"] == "sb_publishable_unit-test"
-    assert calls["json"] == {"email": "client@example.org", "password": "a-strong-password"}
+    def fail_request(*args, **kwargs):
+        raise AssertionError("App sign-in must not call Supabase or query app_users")
+
+    monkeypatch.setattr(main_module.httpx, "post", fail_request)
+    monkeypatch.setattr(main_module.store, "_request", fail_request)
+
+    client = TestClient(app)
+    page = client.get("/login")
+    token = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
+    response = client.post(
+        "/login",
+        data={"csrf_token": token, "username": "client", "password": "FormaClient!2026", "next": "/app"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/app"
 
 
 def test_supabase_email_otp_uses_supabase_auth_not_an_app_mailer(monkeypatch):

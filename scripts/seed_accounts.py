@@ -1,7 +1,9 @@
-"""Create or update the administrator and client in Supabase Auth and app_users.
+"""Create the admin and client profile rows used by workspace features.
 
-Usage: set the Supabase URL/server key/Auth key, account emails, and passwords in .env,
-then run `python scripts/seed_accounts.py` from the project root.
+This script DOES NOT create Supabase Auth users and DOES NOT store or validate
+application passwords. Sign-in is handled by Forma Studio's own configured
+application accounts. Usage: configure the Supabase project URL/server key and
+profile details in .env, then run `python scripts/seed_accounts.py`.
 """
 from __future__ import annotations
 
@@ -14,7 +16,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from app.config import validate_supabase_auth_settings, validate_supabase_settings  # noqa: E402
+from app.accounts import app_user_id  # noqa: E402
+from app.config import validate_supabase_settings  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 
@@ -28,36 +31,25 @@ def server_headers(key: str) -> dict[str, str]:
     return headers
 
 
-def find_auth_user(client: httpx.Client, email: str) -> dict | None:
-    response = client.get("/auth/v1/admin/users", params={"page": 1, "per_page": 1000})
+def profile_for_username(client: httpx.Client, username: str) -> dict | None:
+    response = client.get("/rest/v1/app_users", params={
+        "select": "id,username,email,display_name,role",
+        "username": f"eq.{username}",
+        "limit": 1,
+    })
     response.raise_for_status()
-    result = response.json()
-    users = result.get("users", []) if isinstance(result, dict) else []
-    return next((user for user in users if str(user.get("email", "")).casefold() == email.casefold()), None)
-
-
-def ensure_auth_user(client: httpx.Client, *, email: str, password: str, display_name: str) -> str:
-    payload = {
-        "email": email,
-        "password": password,
-        "email_confirm": True,
-        "user_metadata": {"display_name": display_name},
-    }
-    current = find_auth_user(client, email)
-    if current:
-        auth_id = str(current["id"])
-        response = client.put(f"/auth/v1/admin/users/{auth_id}", json=payload)
-    else:
-        response = client.post("/auth/v1/admin/users", json=payload)
-    response.raise_for_status()
-    body = response.json()
-    auth_id = str(body.get("id") or body.get("user", {}).get("id") or "")
-    if not auth_id:
-        raise RuntimeError(f"Supabase Auth did not return a user ID for {email}.")
-    return auth_id
+    rows = response.json()
+    return rows[0] if rows else None
 
 
 def upsert_profile(client: httpx.Client, values: dict) -> dict:
+    existing = profile_for_username(client, values["username"])
+    if existing and str(existing["id"]) != str(values["id"]):
+        raise RuntimeError(
+            f"The existing {values['role']} profile has ID {existing['id']}, but Forma Studio is configured "
+            f"with {values['id']}. Set {values['role'].upper()}_USER_ID to the existing ID in .env and "
+            "your hosting environment, then rerun this script. No database row was changed."
+        )
     response = client.post(
         "/rest/v1/app_users?on_conflict=username",
         json=values,
@@ -79,67 +71,39 @@ def main() -> None:
             os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
             app_env,
         )
-        auth_key = validate_supabase_auth_settings(
-            os.getenv("SUPABASE_URL", ""),
-            os.getenv("SUPABASE_PUBLISHABLE_KEY", ""),
-            os.getenv("SUPABASE_ANON_KEY", ""),
-            app_env,
-        )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
-
-    if not url or not server_key or not auth_key:
-        raise SystemExit(
-            "Set SUPABASE_URL, exactly one server key, and exactly one Auth key before seeding. "
-            "Use SUPABASE_SECRET_KEY plus SUPABASE_PUBLISHABLE_KEY where available."
-        )
+    if not url or not server_key:
+        raise SystemExit("Set SUPABASE_URL and exactly one server key before provisioning workspace profiles.")
 
     accounts = [
         {
+            "id": app_user_id("admin"),
             "username": os.getenv("ADMIN_USERNAME", "studioadmin").strip(),
-            "password": os.getenv("ADMIN_PASSWORD", "FormaAdmin!2026"),
             "email": os.getenv("ADMIN_EMAIL", "").strip().lower(),
             "display_name": os.getenv("ADMIN_DISPLAY_NAME", "Avery Chen").strip(),
             "role": "admin",
         },
         {
+            "id": app_user_id("client"),
             "username": os.getenv("CLIENT_USERNAME", "client").strip(),
-            "password": os.getenv("CLIENT_PASSWORD", "FormaClient!2026"),
             "email": os.getenv("CLIENT_EMAIL", "").strip().lower(),
             "display_name": os.getenv("CLIENT_DISPLAY_NAME", "Jordan Lee").strip(),
             "role": "client",
         },
     ]
-    if len({item["username"].casefold() for item in accounts}) != 2:
-        raise SystemExit("ADMIN_USERNAME and CLIENT_USERNAME must be different.")
-    for account in accounts:
-        if not account["email"] or "@" not in account["email"] or any(account["email"].endswith(suffix) for suffix in PLACEHOLDER_EMAIL_SUFFIXES):
-            raise SystemExit("Set ADMIN_EMAIL and CLIENT_EMAIL to real, distinct addresses before creating Supabase Auth users.")
-        if account["password"] in {"", "FormaAdmin!2026", "FormaClient!2026"} or len(account["password"]) < 14:
-            raise SystemExit("Set unique ADMIN_PASSWORD and CLIENT_PASSWORD values of at least 14 characters before seeding.")
+    if not accounts[0]["username"] or not accounts[1]["username"] or accounts[0]["username"].casefold() == accounts[1]["username"].casefold():
+        raise SystemExit("ADMIN_USERNAME and CLIENT_USERNAME must be non-empty and different.")
     if accounts[0]["email"] == accounts[1]["email"]:
         raise SystemExit("ADMIN_EMAIL and CLIENT_EMAIL must be different.")
+    for account in accounts:
+        if not account["email"] or "@" not in account["email"] or any(account["email"].endswith(suffix) for suffix in PLACEHOLDER_EMAIL_SUFFIXES):
+            raise SystemExit("Set ADMIN_EMAIL and CLIENT_EMAIL to real, distinct addresses for workspace profiles.")
 
     headers = server_headers(server_key)
     with httpx.Client(base_url=url, headers=headers, timeout=20.0) as client:
         for account in accounts:
-            auth_id = ensure_auth_user(
-                client,
-                email=account["email"],
-                password=account["password"],
-                display_name=account["display_name"],
-            )
-            profile = upsert_profile(
-                client,
-                {
-                    "username": account["username"],
-                    "email": account["email"],
-                    "display_name": account["display_name"],
-                    "role": account["role"],
-                    "auth_user_id": auth_id,
-                    "password_hash": None,
-                },
-            )
+            profile = upsert_profile(client, account)
             for standard in ("GDPR", "SOC 2 Type II", "ISO 27001"):
                 payload = {
                     "owner_id": profile["id"],
@@ -149,14 +113,14 @@ def main() -> None:
                     "access_mode": "request",
                     "notes": "",
                 }
-                entry_response = client.post(
+                response = client.post(
                     "/rest/v1/legal_entries?on_conflict=owner_id,standard",
                     json=payload,
                     headers={"Prefer": "resolution=ignore-duplicates,return=minimal"},
                 )
-                entry_response.raise_for_status()
-            print(f"Configured {account['role']} account: {account['username']}")
-    print("Account setup completed. Passwords are managed by Supabase Auth.")
+                response.raise_for_status()
+            print(f"Provisioned {account['role']} workspace profile: {account['username']}")
+    print("Workspace profiles are ready. Application sign-in credentials remain in Forma Studio environment settings.")
 
 
 if __name__ == "__main__":

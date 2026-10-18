@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import quote
 
 from app.config import validate_base_url, validate_supabase_auth_settings, validate_supabase_settings
+from app.accounts import app_user_id
 
 import httpx
 from dotenv import load_dotenv
@@ -99,13 +100,18 @@ def supabase_auth_request(endpoint: str, payload: dict[str, Any]) -> dict[str, A
     return data if isinstance(data, dict) else None
 
 
-def verify_supabase_password(user_record: dict[str, Any], password: str) -> bool:
-    """Verify the password through Supabase Auth while preserving the existing login UI."""
-    if not SUPABASE_AUTH_KEY or not user_record.get("auth_user_id") or not user_record.get("email"):
-        return False
-    result = supabase_auth_request("token?grant_type=password", {"email": user_record["email"], "password": password})
-    auth_user = result.get("user") if result else None
-    return isinstance(auth_user, dict) and str(auth_user.get("id", "")) == str(user_record["auth_user_id"])
+# Future Supabase Auth password-login integration placeholder (intentionally disabled).
+# Do not call Supabase Auth from the /login route unless the user explicitly asks to
+# activate that integration. Forma Studio login is app-managed and does not query
+# Supabase Auth or the Supabase database to validate a username/password.
+#
+# def verify_supabase_password(user_record: dict[str, Any], password: str) -> bool:
+#     result = supabase_auth_request(
+#         "token?grant_type=password",
+#         {"email": user_record["email"], "password": password},
+#     )
+#     auth_user = result.get("user") if result else None
+#     return bool(auth_user and str(auth_user.get("id")) == str(user_record["auth_user_id"]))
 
 
 def send_supabase_email_otp(email: str, *, create_user: bool = True) -> bool:
@@ -176,15 +182,15 @@ def verify_password(password: str, saved: str | None) -> bool:
 
 
 def default_users() -> list[dict[str, Any]]:
-    """Local development accounts; persistent deployments authenticate through Supabase Auth."""
+    """Application sign-in accounts come from environment settings, not the database."""
     return [
         {
-            "id": "local-admin", "username": os.getenv("ADMIN_USERNAME", "studioadmin"),
+            "id": app_user_id("admin"), "username": os.getenv("ADMIN_USERNAME", "studioadmin"),
             "email": os.getenv("ADMIN_EMAIL", "avery.chen@example.test"), "display_name": "Avery Chen", "role": "admin",
             "password_hash": password_hash(os.getenv("ADMIN_PASSWORD", "FormaAdmin!2026"), "forma-admin-local-salt"),
         },
         {
-            "id": "local-client", "username": os.getenv("CLIENT_USERNAME", "client"),
+            "id": app_user_id("client"), "username": os.getenv("CLIENT_USERNAME", "client"),
             "email": os.getenv("CLIENT_EMAIL", "jordan.lee@example.test"), "display_name": "Jordan Lee", "role": "client",
             "password_hash": password_hash(os.getenv("CLIENT_PASSWORD", "FormaClient!2026"), "forma-client-local-salt"),
         },
@@ -229,8 +235,9 @@ class DataStore:
 
     def _seed_starter_content(self) -> None:
         kit_id = "starter-kit-001"
+        admin_user = next((u for u in self.users if u.get("role") == "admin"), None)
         self.kits.append({
-            "id": kit_id, "owner_id": "local-admin", "name": "Fieldnotes Coffee",
+            "id": kit_id, "owner_id": admin_user["id"] if admin_user else app_user_id("admin"), "name": "Fieldnotes Coffee",
             "brand_name": "Fieldnotes Coffee", "slug": "fieldnotes-coffee",
             "description": "A bright, thoughtful coffee identity made for everyday rituals.",
             "tagline": "Good coffee, no ceremony.",
@@ -275,10 +282,9 @@ class DataStore:
                 })
 
     def get_user(self, username: str) -> dict[str, Any] | None:
-        if self.supabase_enabled:
-            rows = self._request("GET", "app_users", params={"select": "*", "username": f"eq.{username}", "limit": 1}) or []
-            return rows[0] if rows else None
-        return next((u for u in self.users if u["username"].casefold() == username.casefold()), None)
+        """Find a configured application account without querying Supabase."""
+        wanted = (username or "").casefold()
+        return next((u for u in self.users if u["username"].casefold() == wanted), None)
 
     def list_users(self) -> list[dict[str, Any]]:
         if self.supabase_enabled:
@@ -496,10 +502,11 @@ store = DataStore()
 
 
 def get_current_user(request: Request) -> dict[str, Any] | None:
+    """Resolve the signed-in user from configured app identities, never the database."""
     user_id = request.session.get("user_id")
     if not user_id:
         return None
-    user = next((u for u in store.list_users() if str(u.get("id")) == str(user_id)), None)
+    user = next((u for u in store.users if str(u.get("id")) == str(user_id)), None)
     if user:
         return {"id": str(user["id"]), "username": user["username"], "email": user.get("email", ""),
                 "display_name": user.get("display_name") or user["username"], "role": user.get("role", "client")}
@@ -581,14 +588,13 @@ async def login(request: Request) -> Any:
     if not store.record_login_attempt(attempt_key):
         return render(request, "login.html", {"page_title": "Sign in", "next_url": next_url,
                       "error": "Too many sign-in attempts. Please wait a few minutes before trying again."}, 429)
+    # App sign-in is intentionally independent of Supabase Auth and the data store.
+    # Supabase remains the persistence layer for kits and Legal Kit records only.
     user_record = store.get_user(username)
-    if store.supabase_enabled:
-        valid = bool(user_record and verify_supabase_password(user_record, password))
-    else:
-        valid = bool(user_record and verify_password(password, user_record.get("password_hash")))
-    # Local starter credentials must never be accepted by a production deployment.
+    valid = bool(user_record and verify_password(password, user_record.get("password_hash")))
+    # Never allow the published starter passwords on a production deployment.
     if valid and APP_ENV == "production" and (
-        not store.supabase_enabled or password in {"FormaAdmin!2026", "FormaClient!2026"} or len(password) < 14
+        password in {"FormaAdmin!2026", "FormaClient!2026"} or len(password) < 14
     ):
         valid = False
     if not valid:

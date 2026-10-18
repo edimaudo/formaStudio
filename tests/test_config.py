@@ -81,9 +81,9 @@ def test_supabase_auth_accepts_legacy_anon_jwt():
     assert validate_supabase_auth_settings("https://project-ref.supabase.co", "", anon, "production") == anon
 
 
-def test_supabase_auth_requires_key_with_project_and_rejects_conflicts():
-    with pytest.raises(RuntimeError, match="Auth configuration is incomplete"):
-        validate_supabase_auth_settings("https://project-ref.supabase.co", "", "", "development")
+def test_supabase_auth_key_is_optional_and_not_required_for_app_login():
+    assert validate_supabase_auth_settings("https://project-ref.supabase.co", "", "", "production") == ""
+    assert validate_supabase_auth_settings("", "", "", "production") == ""
     with pytest.raises(RuntimeError, match="Set only one Supabase Auth key"):
         validate_supabase_auth_settings("https://project-ref.supabase.co", "sb_publishable_x", _fake_legacy_jwt("anon"), "development")
     with pytest.raises(RuntimeError, match="server Secret key"):
