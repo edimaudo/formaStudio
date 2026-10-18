@@ -16,20 +16,12 @@ services:
         sync: false
       - key: SUPABASE_SECRET_KEY
         sync: false
-      - key: ADMIN_USERNAME
-        value: studioadmin
       - key: ADMIN_USER_ID
         value: 210ad331-4a00-55f4-af5b-28c4e441a799
-      - key: ADMIN_PASSWORD
-        sync: false
       - key: ADMIN_EMAIL
         sync: false
-      - key: CLIENT_USERNAME
-        value: client
       - key: CLIENT_USER_ID
         value: c5105d08-bd79-5d64-b813-754d7bb9f95f
-      - key: CLIENT_PASSWORD
-        sync: false
       - key: CLIENT_EMAIL
         sync: false
       - key: GEMINI_API_KEY

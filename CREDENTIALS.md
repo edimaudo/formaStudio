@@ -4,29 +4,25 @@ Keep secret values in a local `.env` file or your hosting provider's encrypted e
 
 ## 1. Application login accounts
 
-Forma Studio's visible username/password login is **app-managed**. The application validates the configured usernames and passwords on the server. It does not use Supabase Auth to validate these credentials and does not query Supabase Postgres as part of login or session-user resolution. The login form stays the only visible login UI; Supabase Auth login UI/backend sign-in placeholders remain commented out.
+Forma Studio's visible username/password login is **app-managed**. The requested accounts and passwords are built into the application and work without any Vercel login environment variables. The app does not use Supabase Auth to validate these credentials and does not query Supabase Postgres as part of login or session-user resolution. The login form stays the only visible login UI; Supabase Auth sign-in placeholders remain commented out.
 
 | Variable | Purpose | Notes |
 | --- | --- | --- |
-| `ADMIN_USERNAME` | Administrator username | Defaults to `studioadmin`. |
-| `ADMIN_PASSWORD` | Administrator password | Local example only; use a unique password in a hosted environment. |
 | `ADMIN_USER_ID` | Administrator's workspace profile UUID | Defaults to the Forma Studio profile ID in `app/accounts.py`. Must match `public.app_users.id`. |
 | `ADMIN_EMAIL` | Profile/contact email for the administrator | Use a real address for hosted use and Legal Kit features. |
 | `ADMIN_DISPLAY_NAME` | Name shown in the workspace | Defaults to `Avery Chen`; replace as appropriate. |
-| `CLIENT_USERNAME` | Client username | Defaults to `client`. |
-| `CLIENT_PASSWORD` | Client password | Local example only; use a unique password in a hosted environment. |
 | `CLIENT_USER_ID` | Client's workspace profile UUID | Defaults to the Forma Studio profile ID in `app/accounts.py`. Must match `public.app_users.id`. |
 | `CLIENT_EMAIL` | Profile/contact email for the client | Use a real address for hosted use and Legal Kit features. |
 | `CLIENT_DISPLAY_NAME` | Name shown in the workspace | Defaults to `Jordan Lee`; replace as appropriate. |
 
-The known local credentials are:
+The fixed application credentials (same in local and hosted environments) are:
 
-| Role | Username | Local example password |
+| Role | Username | Application password |
 | --- | --- | --- |
 | Admin | `studioadmin` | `FormaAdmin!2026` |
 | Client | `client` | `FormaClient!2026` |
 
-Do not keep these example passwords on a public production deployment. The application password values are environment settings; they are not Supabase Auth passwords and are not stored in `app_users`.
+These are the built-in application passwords in all environments; they do not need to be added to Vercel. They are not Supabase Auth passwords and are not stored in `app_users`. Because these shared credentials are fixed in source, anyone who knows them can sign in. Use this setup only for a controlled prototype; do not expose it publicly with sensitive workspace data.
 
 Run `python scripts/seed_accounts.py` after configuring the Supabase database. The script creates or updates workspace profile rows and Legal Kit entries; it does **not** create Supabase Auth users and does not read, store, or modify application passwords. If it reports that an existing username has a different profile UUID, set `ADMIN_USER_ID` or `CLIENT_USER_ID` to the reported existing UUID in both local environment and hosting settings, then rerun. This prevents workspace records from being reassigned accidentally.
 
@@ -85,21 +81,18 @@ The commented-out Supabase Auth sign-in placeholder is not rendered and is not c
 
 ## 5. Local environment example
 
-Copy `.env.example` to `.env`; replace local/default values before public deployment.
+Copy `.env.example` to `.env`; replace placeholder service credentials and profile emails. The application login credentials are built in and are not set through `.env`.
 
 ```dotenv
 APP_NAME=Forma Studio
 APP_ENV=development
 SESSION_SECRET=replace-with-a-unique-random-value-of-at-least-32-characters
 
-ADMIN_USERNAME=studioadmin
+# Workspace profiles, not login credentials
 ADMIN_USER_ID=210ad331-4a00-55f4-af5b-28c4e441a799
-ADMIN_PASSWORD=FormaAdmin!2026
 ADMIN_EMAIL=avery.chen@example.test
 ADMIN_DISPLAY_NAME=Avery Chen
-CLIENT_USERNAME=client
 CLIENT_USER_ID=c5105d08-bd79-5d64-b813-754d7bb9f95f
-CLIENT_PASSWORD=FormaClient!2026
 CLIENT_EMAIL=jordan.lee@example.test
 CLIENT_DISPLAY_NAME=Jordan Lee
 
@@ -120,7 +113,7 @@ QLOO_BASE_URL=https://hackathon.api.qloo.com
 - [ ] Configure the actual `formastudio` Project URL and exactly one server key.
 - [ ] Run `schema.sql` in Supabase; for a new install, the legacy `20261018_supabase_auth.sql` is not required.
 - [ ] Set real profile email addresses and run `python scripts/seed_accounts.py` to provision the Postgres profile rows.
-- [ ] Configure unique app usernames/passwords in the application environment; these are independent of Supabase Auth.
+- [ ] Confirm the built-in application accounts work. No username/password variables are required; do not expose the shared credentials publicly with sensitive data.
 - [ ] Set a fresh `SESSION_SECRET` in the host's secret settings.
 - [ ] Configure `GEMINI_API_KEY` and test tagline and elevator-pitch generation.
 - [ ] Only if email OTP is needed, configure one optional Auth key and verify the Supabase email template and SMTP.

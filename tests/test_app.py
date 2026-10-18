@@ -203,3 +203,24 @@ def test_supabase_email_otp_uses_supabase_auth_not_an_app_mailer(monkeypatch):
     assert calls["url"] == "https://project-ref.supabase.co/auth/v1/otp"
     assert calls["headers"]["apikey"] == "sb_publishable_unit-test"
     assert calls["json"] == {"email": "allowed@example.org", "create_user": True}
+
+
+def test_builtin_application_credentials_work_in_production_without_login_env_vars(monkeypatch):
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "APP_ENV", "production")
+    for username, password, role in [
+        ("studioadmin", "FormaAdmin!2026", "admin"),
+        ("client", "FormaClient!2026", "client"),
+    ]:
+        client = TestClient(app)
+        page = client.get("/login")
+        token = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
+        response = client.post(
+            "/login",
+            data={"csrf_token": token, "username": username, "password": password, "next": "/app"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert response.headers["location"] == "/app"
+        assert main_module.store.get_user(username)["role"] == role

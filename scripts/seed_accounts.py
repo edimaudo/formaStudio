@@ -79,21 +79,21 @@ def main() -> None:
     accounts = [
         {
             "id": app_user_id("admin"),
-            "username": os.getenv("ADMIN_USERNAME", "studioadmin").strip(),
+            "username": "studioadmin",
             "email": os.getenv("ADMIN_EMAIL", "").strip().lower(),
             "display_name": os.getenv("ADMIN_DISPLAY_NAME", "Avery Chen").strip(),
             "role": "admin",
         },
         {
             "id": app_user_id("client"),
-            "username": os.getenv("CLIENT_USERNAME", "client").strip(),
+            "username": "client",
             "email": os.getenv("CLIENT_EMAIL", "").strip().lower(),
             "display_name": os.getenv("CLIENT_DISPLAY_NAME", "Jordan Lee").strip(),
             "role": "client",
         },
     ]
     if not accounts[0]["username"] or not accounts[1]["username"] or accounts[0]["username"].casefold() == accounts[1]["username"].casefold():
-        raise SystemExit("ADMIN_USERNAME and CLIENT_USERNAME must be non-empty and different.")
+        raise SystemExit("The configured administrator and client profile usernames must be different.")
     if accounts[0]["email"] == accounts[1]["email"]:
         raise SystemExit("ADMIN_EMAIL and CLIENT_EMAIL must be different.")
     for account in accounts:
@@ -120,7 +120,7 @@ def main() -> None:
                 )
                 response.raise_for_status()
             print(f"Provisioned {account['role']} workspace profile: {account['username']}")
-    print("Workspace profiles are ready. Application sign-in credentials remain in Forma Studio environment settings.")
+    print("Workspace profiles are ready. Forma Studio's application login uses its two built-in account credentials.")
 
 
 if __name__ == "__main__":

@@ -185,14 +185,18 @@ def default_users() -> list[dict[str, Any]]:
     """Application sign-in accounts come from environment settings, not the database."""
     return [
         {
-            "id": app_user_id("admin"), "username": os.getenv("ADMIN_USERNAME", "studioadmin"),
-            "email": os.getenv("ADMIN_EMAIL", "avery.chen@example.test"), "display_name": "Avery Chen", "role": "admin",
-            "password_hash": password_hash(os.getenv("ADMIN_PASSWORD", "FormaAdmin!2026"), "forma-admin-local-salt"),
+            # Requested application credentials are built in; they do not need to be
+            # entered as Vercel environment variables and are not Supabase credentials.
+            "id": app_user_id("admin"), "username": "studioadmin",
+            "email": os.getenv("ADMIN_EMAIL", "avery.chen@example.test"),
+            "display_name": os.getenv("ADMIN_DISPLAY_NAME", "Avery Chen"), "role": "admin",
+            "password_hash": password_hash("FormaAdmin!2026"),
         },
         {
-            "id": app_user_id("client"), "username": os.getenv("CLIENT_USERNAME", "client"),
-            "email": os.getenv("CLIENT_EMAIL", "jordan.lee@example.test"), "display_name": "Jordan Lee", "role": "client",
-            "password_hash": password_hash(os.getenv("CLIENT_PASSWORD", "FormaClient!2026"), "forma-client-local-salt"),
+            "id": app_user_id("client"), "username": "client",
+            "email": os.getenv("CLIENT_EMAIL", "jordan.lee@example.test"),
+            "display_name": os.getenv("CLIENT_DISPLAY_NAME", "Jordan Lee"), "role": "client",
+            "password_hash": password_hash("FormaClient!2026"),
         },
     ]
 
@@ -592,11 +596,8 @@ async def login(request: Request) -> Any:
     # Supabase remains the persistence layer for kits and Legal Kit records only.
     user_record = store.get_user(username)
     valid = bool(user_record and verify_password(password, user_record.get("password_hash")))
-    # Never allow the published starter passwords on a production deployment.
-    if valid and APP_ENV == "production" and (
-        password in {"FormaAdmin!2026", "FormaClient!2026"} or len(password) < 14
-    ):
-        valid = False
+    # The two requested application accounts work in every environment. They are
+    # intentionally independent of Supabase Auth and do not require login variables.
     if not valid:
         return render(request, "login.html", {"page_title": "Sign in", "next_url": next_url,
                       "error": "That username and password do not match. Check your details and try again."}, 401)
