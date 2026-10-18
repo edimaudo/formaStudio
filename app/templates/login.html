@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="login-page">
+  <a class="wordmark login-wordmark" href="/"><span class="wordmark-mark">F</span><span>{{ app_name }}</span></a>
+  <div class="login-layout">
+    <section class="login-story"><h1>Good brands start with a <em>clear point of view.</em></h1><p>Pick up where your thinking left off. Your brand kits, creative decisions, and client handoffs are ready when you are.</p><div class="login-story-art"><div class="login-art-swatch swatch-forest"></div><div class="login-art-swatch swatch-oat"></div><div class="login-art-swatch swatch-apricot"></div><div class="login-art-type">Aa</div><div class="login-art-label">A living identity system</div></div></section>
+    <section class="login-panel" aria-labelledby="login-title"><div class="login-panel-heading"><h2 id="login-title">Sign in</h2><p>Use your studio username and password.</p></div>
+      {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+      <form method="post" action="/login" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ next_url }}">
+        <label for="username">Username</label><input id="username" name="username" type="text" autocomplete="username" required autofocus placeholder="Enter your username">
+        <div class="label-row"><label for="password">Password</label><button class="text-button" type="button" data-toggle-password="password">Show</button></div><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
+        <button class="button button-primary button-full button-large" type="submit">Continue <span aria-hidden="true">→</span></button>
+      </form>
+      {# Supabase Auth UI placeholder — intentionally commented out. The existing branded form remains the only login UI; FastAPI verifies credentials through Supabase Auth on the server. Do not render a provider-specific widget here unless the product requirements change. #}
+      <p class="login-footnote">Need access? Ask your studio administrator to set up your account.</p>
+    </section>
+  </div>
+  <p class="login-legal">By signing in, you agree to use shared brand materials according to their access settings.</p>
+</main>
+{% endblock %}

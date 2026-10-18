@@ -1,0 +1,40 @@
+# Optional Render Blueprint. Use this only if you choose Render as the hosting provider.
+services:
+  - type: web
+    name: forma-studio
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_NAME
+        value: Forma Studio
+      - key: APP_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: ADMIN_USERNAME
+        value: studioadmin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: CLIENT_USERNAME
+        value: client
+      - key: CLIENT_PASSWORD
+        sync: false
+      - key: CLIENT_EMAIL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: QLOO_API_KEY
+        sync: false
+      - key: QLOO_BASE_URL
+        value: https://hackathon.api.qloo.com

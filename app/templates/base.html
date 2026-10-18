@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-font-size="medium">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Build distinctive brand systems and share a living brand kit from one link.">
+  <title>{% if page_title %}{{ page_title }} · {% endif %}{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>window.FORMA_CSRF={{ csrf_token|tojson }};window.FORMA_APP_NAME={{ app_name|tojson }};</script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+  {% block body %}{% endblock %}
+</body>
+</html>
