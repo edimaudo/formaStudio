@@ -5,6 +5,15 @@ from fastapi.testclient import TestClient
 from app.main import BLOCK_TYPES, LEGAL_STANDARDS, DataStore, app, password_hash, slugify, verify_password, store
 
 
+def test_upload_directory_is_not_created_during_module_import():
+    """The deployed application bundle is read-only; uploads use Supabase Storage."""
+    from app import main as main_module
+
+    source = __import__("pathlib").Path(main_module.__file__).read_text(encoding="utf-8")
+    assert "UPLOAD_DIR.mkdir(" not in source
+    assert "storage/v1/object/brand-assets" in source
+
+
 def test_password_hash_verifies_and_is_salted():
     first = password_hash("Example-safe-password")
     second = password_hash("Example-safe-password")

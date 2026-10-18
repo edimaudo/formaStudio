@@ -29,8 +29,10 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
+# Uploaded brand assets use Supabase Storage in deployed environments. The local
+# filesystem is only a development fallback, so never write to the bundled app
+# directory during import (Vercel deployment filesystems are read-only).
 UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".mp4", ".webm", ".glb", ".gltf", ".woff", ".woff2", ".ttf", ".otf", ".svg", ".zip", ".docx", ".pptx"}
 APP_NAME = os.getenv("APP_NAME", "Forma Studio")
