@@ -76,7 +76,7 @@ def test_ui_avoids_eyebrow_labels_and_keeps_accessible_appearance_controls() -> 
     public = TestClient(app)
     landing = public.get("/").text
     assert 'class="eyebrow"' not in landing
-    assert "Build a brand people can" in landing
+    assert "Build the brand your fans can recognize." in landing
     assert ("de" + "mo") not in landing.lower()
 
     client = TestClient(app)
@@ -89,6 +89,107 @@ def test_ui_avoids_eyebrow_labels_and_keeps_accessible_appearance_controls() -> 
     assert 'data-font-choice="large"' in dashboard
     assert 'class="eyebrow"' not in dashboard
 
+
+
+def test_landing_page_matches_requested_copy_and_removes_redundant_elements() -> None:
+    response = TestClient(app).get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "Build the brand your fans can recognize." in html
+    assert "IDENTITY / 01" not in html
+    assert "Made for designers, agencies, and brand teams" not in html
+    assert "From first thought" not in html
+    assert "Less chasing files" not in html
+    assert 'class="card-index"' not in html
+    assert '<footer class="site-footer' not in html
+    assert 'id="public-navigation"' in html
+    assert 'aria-expanded="false" aria-controls="public-navigation"' in html
+    # The header navigation should contain exactly one login/studio action.
+    nav = re.search(r'<nav id="public-navigation".*?</nav>', html, re.S).group(0)
+    assert nav.count('href="/login"') == 1
+    assert "Skip to main content" in html
+    assert 'id="main-content" tabindex="-1"' in html
+
+
+def test_accessibility_baseline_has_contrast_tokens_and_skip_link_targets() -> None:
+    from pathlib import Path
+    templates = Path(__file__).parents[1] / "app" / "templates"
+    css = (Path(__file__).parents[1] / "app" / "static" / "css" / "app.css").read_text()
+    assert "--muted: #626d66" in css
+    assert "--focus: #005fcc" in css
+    assert "--focus: #ffd166" in css
+    for template in templates.glob("*.html"):
+        if template.name in {"base.html", "settings_modal.html"}:
+            continue
+        body = template.read_text()
+        assert 'id="main-content" tabindex="-1"' in body, template.name
+
+
+def test_accessibility_theme_tokens_meet_contrast_thresholds() -> None:
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / "app" / "static" / "css" / "app.css").read_text()
+
+    def luminance(hex_color: str) -> float:
+        channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    def contrast(foreground: str, background: str) -> float:
+        lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    assert contrast("#626d66", "#f5f4ee") >= 4.5  # muted body text on light page
+    assert contrast("#626d66", "#fffefa") >= 4.5  # muted text on cards and fields
+    assert contrast("#005fcc", "#f5f4ee") >= 3.0  # focus indicator on light surface
+    assert contrast("#7f8b81", "#f5f4ee") >= 3.0  # light input/control borders
+    assert contrast("#ffd166", "#151d19") >= 3.0  # focus indicator in dark theme
+    assert contrast("#6c7b70", "#1e2923") >= 3.0  # dark input/control borders
+
+
+def test_video_blocks_support_uploaded_webvtt_captions() -> None:
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    editor = (root / "app" / "templates" / "kit_editor.html").read_text(encoding="utf-8")
+    shared = (root / "app" / "templates" / "shared_kit.html").read_text(encoding="utf-8")
+    main_source = (root / "app" / "main.py").read_text(encoding="utf-8")
+    js = (root / "app" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    assert 'data-block-caption-url' in editor
+    assert 'data-caption-file' in editor
+    assert 'data-upload-captions' in editor
+    assert '<track kind="captions"' in shared
+    assert '".vtt": "text/vtt; charset=utf-8"' in main_source
+    assert 'caption_url: block.querySelector' in js
+
+
+
+def test_shared_video_includes_webvtt_track_when_configured() -> None:
+    from copy import deepcopy
+
+    kit = store.get_kit_by_id("starter-kit-001")
+    assert kit is not None
+    original_blocks = deepcopy(kit["blocks"])
+    try:
+        blocks = deepcopy(original_blocks)
+        blocks.append({
+            "id": "wcag-caption-test",
+            "type": "Videos",
+            "title": "Accessible product film",
+            "content": "A film with an accompanying caption track.",
+            "asset_url": "/assets/starter-kit-001/product-film.mp4",
+            "caption_url": "/assets/starter-kit-001/product-film.en.vtt",
+        })
+        store.update_kit("starter-kit-001", {"blocks": blocks})
+        response = TestClient(app).get("/b/fieldnotes-coffee")
+        assert response.status_code == 200
+        assert '<track kind="captions" src="/assets/starter-kit-001/product-film.en.vtt?inline=1" srclang="en" label="English captions" default>' in response.text
+    finally:
+        store.update_kit("starter-kit-001", {"blocks": original_blocks})
+
+def test_generated_copy_textarea_has_an_accessible_label() -> None:
+    from pathlib import Path
+    editor = (Path(__file__).parents[1] / "app" / "templates" / "kit_editor.html").read_text(encoding="utf-8")
+    assert '<label class="sr-only" for="copy-result">Generated copy</label>' in editor
+    assert '<textarea id="copy-result" data-copy-result' in editor
 
 def test_approved_legal_request_can_reverify_without_losing_approval() -> None:
     if store.supabase_enabled:

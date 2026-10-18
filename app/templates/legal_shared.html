@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block body %}
-<header class="shared-header"><a class="wordmark" href="/"><span class="wordmark-mark">F</span><span>{{ app_name }}</span></a><span class="shared-header-label">LEGAL KIT</span></header>
-<main class="legal-public-page shell">
+<header class="shared-header"><a class="wordmark" href="/"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a><span class="shared-header-label">LEGAL KIT</span></header>
+<main id="main-content" tabindex="-1" class="legal-public-page shell">
   <section class="shared-kit-cover legal-cover"><div class="shared-cover-label"><span>TRUST & COMPLIANCE</span><span>DOCUMENT PORTAL</span></div><h1>Legal Kit</h1><p class="shared-description">Compliance documents and supporting materials, organized with access controls.</p><div class="shared-cover-footer"><span>Publicly available evidence is linked below.</span><span>Updated {{ entries[0].updated_at[:10] if entries else 'when documents are published' }}</span></div></section>
   {% set messages = {'verification_sent':'A verification code was sent to your email.', 'invalid_code':'That code is invalid or expired. Request a new code and try again.', 'email_verification_unavailable':'Email verification is not configured for this portal. Contact the workspace administrator.', 'email_send_failed':'A verification email could not be requested. Check the address or try again shortly.', 'request_submitted':'Your email is verified. The document owner will review your request.', 'already_approved':'Your request is already approved.', 'invalid_email':'Enter a valid email address.', 'request_expired':'This verification attempt expired. Start a new request.', 'access_unavailable':'This document is not accepting access requests.'} %}
   {% if message %}<div class="alert {{ 'alert-success' if message in ['verification_sent','request_submitted','already_approved'] else 'alert-error' }} legal-public-message" role="status">{{ messages.get(message, message) }}</div>{% endif %}
@@ -16,6 +16,6 @@
     </div></article>{% endfor %}
   </section>
   <p class="legal-public-disclaimer">A listed standard is not, by itself, proof of certification. Review the linked source documents and their current validity.</p>
-  <footer class="shared-kit-footer"><a class="wordmark" href="/"><span class="wordmark-mark">F</span><span>{{ app_name }}</span></a><span>Controlled document sharing for brand and business teams.</span></footer>
+  <footer class="shared-kit-footer"><a class="wordmark" href="/"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a><span>Controlled document sharing for brand and business teams.</span></footer>
 </main>
 {% endblock %}

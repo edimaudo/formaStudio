@@ -15,6 +15,7 @@
   const settingsOpeners = document.querySelectorAll('[data-open-settings]');
   const closeSettingsButtons = document.querySelectorAll('[data-close-settings]');
   let previousSettingsFocus = null;
+  let previouslyInertElements = [];
 
   document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === root.dataset.theme)));
   document.querySelectorAll('[data-font-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.fontChoice === root.dataset.fontSize)));
@@ -24,6 +25,11 @@
     previousSettingsFocus = event?.currentTarget || document.activeElement;
     settingsPanel.hidden = false;
     settingsBackdrop.hidden = false;
+    previouslyInertElements = [...document.body.children]
+      .filter(element => element !== settingsPanel && element !== settingsBackdrop)
+      .map(element => ({ element, inert: element.inert }));
+    previouslyInertElements.forEach(({ element }) => { element.inert = true; });
+    settingsOpeners.forEach(button => button.setAttribute('aria-expanded', 'true'));
     const active = settingsPanel.querySelector(`[data-theme-choice="${root.dataset.theme}"]`);
     (active || settingsPanel.querySelector('button, input, select, textarea, a[href]'))?.focus();
   }
@@ -31,6 +37,9 @@
     if (!settingsPanel || !settingsBackdrop) return;
     settingsPanel.hidden = true;
     settingsBackdrop.hidden = true;
+    previouslyInertElements.forEach(({ element, inert }) => { element.inert = inert; });
+    previouslyInertElements = [];
+    settingsOpeners.forEach(button => button.setAttribute('aria-expanded', 'false'));
     previousSettingsFocus?.focus?.();
     previousSettingsFocus = null;
   }
@@ -39,6 +48,12 @@
   settingsBackdrop?.addEventListener('click', closeSettings);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && settingsPanel && !settingsPanel.hidden) { closeSettings(); return; }
+    if (event.key === 'Escape' && sidebar?.classList.contains('sidebar-open') && sidebarMedia.matches) {
+      sidebar.classList.remove('sidebar-open'); syncSidebarAccessibility(); sidebarToggle?.focus(); return;
+    }
+    if (event.key === 'Escape' && publicNav?.classList.contains('mobile-open')) {
+      setPublicMenu(false); publicMenuToggle?.focus(); return;
+    }
     if (event.key !== 'Tab' || !settingsPanel || settingsPanel.hidden) return;
     const focusable = [...settingsPanel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
       .filter(item => item.getAttribute('aria-hidden') !== 'true' && item.offsetParent !== null);
@@ -65,24 +80,44 @@
     });
   });
 
-  document.querySelector('[data-mobile-menu]')?.addEventListener('click', event => {
-    const nav = document.querySelector('.public-nav');
-    if (!nav) return;
-    const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
-    event.currentTarget.setAttribute('aria-expanded', String(!expanded));
-    nav.classList.toggle('mobile-open', !expanded);
-  });
-  document.querySelector('[data-sidebar-toggle]')?.addEventListener('click', () => {
-    document.querySelector('[data-sidebar]')?.classList.toggle('sidebar-open');
-  });
-  document.addEventListener('click', event => {
-    const sidebar = document.querySelector('[data-sidebar]');
-    const toggle = document.querySelector('[data-sidebar-toggle]');
-    if (sidebar?.classList.contains('sidebar-open') && !sidebar.contains(event.target) && !toggle?.contains(event.target)) {
-      sidebar.classList.remove('sidebar-open');
-    }
+  const publicMenuToggle = document.querySelector('[data-mobile-menu]');
+  const publicNav = document.querySelector('#public-navigation');
+  function setPublicMenu(open) {
+    if (!publicMenuToggle || !publicNav) return;
+    const expanded = Boolean(open);
+    publicMenuToggle.setAttribute('aria-expanded', String(expanded));
+    publicNav.classList.toggle('mobile-open', expanded);
+  }
+  publicMenuToggle?.addEventListener('click', () => {
+    setPublicMenu(publicMenuToggle.getAttribute('aria-expanded') !== 'true');
   });
 
+  const sidebar = document.querySelector('[data-sidebar]');
+  const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+  const sidebarMedia = window.matchMedia('(max-width: 650px)');
+  function syncSidebarAccessibility() {
+    if (!sidebar) return;
+    const hidden = sidebarMedia.matches && !sidebar.classList.contains('sidebar-open');
+    sidebar.inert = hidden;
+    sidebar.setAttribute('aria-hidden', String(hidden));
+    sidebarToggle?.setAttribute('aria-expanded', String(!hidden && sidebarMedia.matches));
+  }
+  syncSidebarAccessibility();
+  sidebarMedia.addEventListener?.('change', syncSidebarAccessibility);
+  sidebarToggle?.addEventListener('click', () => {
+    if (!sidebar) return;
+    const open = !sidebar.classList.contains('sidebar-open');
+    sidebar.classList.toggle('sidebar-open', open);
+    syncSidebarAccessibility();
+    if (open) sidebar.querySelector('a[href], button:not([disabled])')?.focus();
+    else sidebarToggle.focus();
+  });
+  document.addEventListener('click', event => {
+    if (sidebar?.classList.contains('sidebar-open') && !sidebar.contains(event.target) && !sidebarToggle?.contains(event.target)) {
+      sidebar.classList.remove('sidebar-open');
+      syncSidebarAccessibility();
+    }
+  });
   document.querySelectorAll('[data-scroll-create]').forEach(link => link.addEventListener('click', event => {
     const target = document.querySelector('#create-kit');
     if (target) { event.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); target.querySelector('input')?.focus({ preventScroll: true }); }
@@ -158,7 +193,8 @@
         type: block.dataset.blockType,
         title: block.querySelector('[data-block-title]')?.value || block.dataset.blockType,
         content: block.querySelector('[data-block-content]')?.value || '',
-        asset_url: block.querySelector('[data-block-url]')?.value.trim() || ''
+        asset_url: block.querySelector('[data-block-url]')?.value.trim() || '',
+        caption_url: block.querySelector('[data-block-caption-url]')?.value.trim() || ''
       }));
     }
     function kitData() {
@@ -234,6 +270,10 @@
       card.append(makeLabelInput('Content and usage notes', 'textarea', 'data-block-content', defaultBlockContent(type)));
       const assetLabel = makeLabelInput('Asset or reference URL (optional)', 'input', 'data-block-url', '');
       assetLabel.querySelector('input').type = 'text'; assetLabel.querySelector('input').placeholder = 'https://... or uploaded file'; assetLabel.querySelector('input').maxLength = 1500; card.append(assetLabel);
+      if (type === 'Videos') {
+        const captionLabel = makeLabelInput('Captions file URL (WebVTT, optional)', 'input', 'data-block-caption-url', '');
+        captionLabel.querySelector('input').type = 'text'; captionLabel.querySelector('input').placeholder = 'Upload a .vtt file below'; captionLabel.querySelector('input').maxLength = 1500; card.append(captionLabel);
+      }
       const uploadDetails = document.createElement('details'); uploadDetails.className = 'asset-upload';
       const uploadSummary = document.createElement('summary'); uploadSummary.textContent = 'Upload a file'; uploadDetails.append(uploadSummary);
       const uploadControls = document.createElement('div'); uploadControls.className = 'asset-upload-controls';
@@ -241,7 +281,15 @@
       const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.dataset.blockFile = ''; fileInput.accept = '.png,.jpg,.jpeg,.webp,.gif,.pdf,.mp4,.webm,.glb,.gltf,.woff,.woff2,.ttf,.otf,.svg,.zip,.docx,.pptx'; uploadLabel.append(fileInput);
       const uploadButton = document.createElement('button'); uploadButton.type = 'button'; uploadButton.className = 'button button-secondary button-small'; uploadButton.dataset.uploadAsset = ''; uploadButton.textContent = 'Upload file';
       const uploadFeedback = document.createElement('p'); uploadFeedback.dataset.uploadFeedback = ''; uploadFeedback.setAttribute('role', 'status'); uploadFeedback.setAttribute('aria-live', 'polite');
-      uploadControls.append(uploadLabel, uploadButton, uploadFeedback); uploadDetails.append(uploadControls); card.append(uploadDetails);
+      uploadControls.append(uploadLabel, uploadButton, uploadFeedback);
+      if (type === 'Videos') {
+        const captionLabel = document.createElement('label'); captionLabel.append(document.createTextNode('Choose WebVTT captions (.vtt)'));
+        const captionInput = document.createElement('input'); captionInput.type = 'file'; captionInput.dataset.captionFile = ''; captionInput.accept = '.vtt,text/vtt'; captionLabel.append(captionInput);
+        const captionButton = document.createElement('button'); captionButton.type = 'button'; captionButton.className = 'button button-secondary button-small'; captionButton.dataset.uploadCaptions = ''; captionButton.textContent = 'Upload captions';
+        const captionFeedback = document.createElement('p'); captionFeedback.dataset.captionFeedback = ''; captionFeedback.setAttribute('role', 'status'); captionFeedback.setAttribute('aria-live', 'polite');
+        uploadControls.append(captionLabel, captionButton, captionFeedback);
+      }
+      uploadDetails.append(uploadControls); card.append(uploadDetails);
       const foot = document.createElement('div'); foot.className = 'block-card-foot';
       const note = document.createElement('span'); note.textContent = 'Changes are saved to this kit, not to external files.';
       const orders = document.createElement('div'); orders.className = 'block-order-actions';
@@ -258,13 +306,15 @@
       label.append(element); return label;
     }
     blockList?.addEventListener('click', async event => {
-      const upload = event.target.closest('[data-upload-asset]');
+      const upload = event.target.closest('[data-upload-asset], [data-upload-captions]');
       if (upload) {
+        const captionUpload = upload.matches('[data-upload-captions]');
         const card = upload.closest('[data-block]');
-        const fileInput = card?.querySelector('[data-block-file]');
-        const status = card?.querySelector('[data-upload-feedback]');
+        const fileInput = card?.querySelector(captionUpload ? '[data-caption-file]' : '[data-block-file]');
+        const status = card?.querySelector(captionUpload ? '[data-caption-feedback]' : '[data-upload-feedback]');
         const file = fileInput?.files?.[0];
-        if (!file) { if (status) status.textContent = 'Choose a file first.'; return; }
+        if (!file) { if (status) status.textContent = captionUpload ? 'Choose a WebVTT captions file first.' : 'Choose a file first.'; return; }
+        if (captionUpload && !file.name.toLowerCase().endsWith('.vtt')) { if (status) status.textContent = 'Choose a .vtt WebVTT captions file.'; return; }
         if (file.size > 15 * 1024 * 1024) { if (status) status.textContent = 'Files must be 15 MB or smaller.'; return; }
         const previousText = upload.textContent;
         upload.disabled = true; upload.setAttribute('aria-busy', 'true'); upload.textContent = 'Uploading…';
@@ -276,7 +326,7 @@
             body: form, credentials: 'same-origin'
           });
           const result = await readJson(response);
-          const urlInput = card.querySelector('[data-block-url]');
+          const urlInput = card.querySelector(captionUpload ? '[data-block-caption-url]' : '[data-block-url]');
           if (urlInput) urlInput.value = result.asset_url;
           if (status) status.textContent = `${result.filename} uploaded. Save changes to attach it to this kit.`;
         } catch (error) { if (status) status.textContent = error.message; }

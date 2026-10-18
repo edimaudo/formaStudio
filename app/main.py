@@ -35,7 +35,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # directory during import (Vercel deployment filesystems are read-only).
 UPLOAD_DIR = BASE_DIR / "uploads"
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
-ALLOWED_UPLOAD_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".mp4", ".webm", ".glb", ".gltf", ".woff", ".woff2", ".ttf", ".otf", ".svg", ".zip", ".docx", ".pptx"}
+ALLOWED_UPLOAD_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".mp4", ".webm", ".glb", ".gltf", ".woff", ".woff2", ".ttf", ".otf", ".svg", ".zip", ".docx", ".pptx", ".vtt"}
 APP_NAME = os.getenv("APP_NAME", "Forma Studio")
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-only-change-this-secret-before-deploying")
@@ -684,14 +684,18 @@ async def save_kit(request: Request, kit_id: str, payload: KitUpdate) -> JSONRes
         if block.get("type") not in BLOCK_TYPES:
             continue
         asset_url = str(block.get("asset_url", "")).strip()[:1500]
+        caption_url = str(block.get("caption_url", "")).strip()[:1500] if block.get("type") == "Videos" else ""
         if asset_url and not (asset_url.startswith("https://") or re.fullmatch(rf"/assets/{re.escape(kit_id)}/[A-Za-z0-9._-]+", asset_url)):
             raise HTTPException(status_code=422, detail="Asset links must use HTTPS or a file uploaded to this brand kit.")
+        if caption_url and not (caption_url.startswith("https://") or re.fullmatch(rf"/assets/{re.escape(kit_id)}/[A-Za-z0-9._-]+", caption_url)):
+            raise HTTPException(status_code=422, detail="Caption links must use HTTPS or a WebVTT file uploaded to this brand kit.")
         clean_blocks.append({
             "id": str(block.get("id") or uuid.uuid4()),
             "type": block["type"],
             "title": str(block.get("title", block["type"]))[:140],
             "content": str(block.get("content", ""))[:8000],
             "asset_url": asset_url,
+            "caption_url": caption_url,
         })
     if payload.access_mode == "password" and not payload.access_password and not kit.get("access_password_hash"):
         raise HTTPException(status_code=422, detail="Add a password before enabling password-protected sharing.")
@@ -778,6 +782,7 @@ async def upload_kit_asset(request: Request, kit_id: str) -> JSONResponse:
         ".ttf": "font/ttf", ".otf": "font/otf", ".svg": "image/svg+xml", ".zip": "application/zip",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".vtt": "text/vtt; charset=utf-8",
     }
     content_type = upload_content_types[extension]
     if store.supabase_enabled:
@@ -805,13 +810,13 @@ def serve_kit_asset(request: Request, kit_id: str, asset_name: str, inline: bool
     user = get_current_user(request)
     if not ((user and can_manage_kit(user, kit)) or (kit.get("status") == "published" and allowed_to_view_kit(request, kit))):
         raise HTTPException(status_code=403, detail="This asset is not available with your current access.")
-    referenced = any(str(block.get("asset_url", "")) == f"/assets/{kit_id}/{asset_name}" for block in kit.get("blocks", []))
+    referenced = any(f"/assets/{kit_id}/{asset_name}" in {str(block.get("asset_url", "")), str(block.get("caption_url", ""))} for block in kit.get("blocks", []))
     if not referenced:
         raise HTTPException(status_code=404, detail="Asset not found.")
     extension = Path(asset_name).suffix.lower()
     inline_types = {
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".webp": "image/webp", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+        ".webp": "image/webp", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".vtt": "text/vtt",
     }
     if inline and extension not in inline_types:
         raise HTTPException(status_code=415, detail="This asset type cannot be previewed inline. Download it instead.")
