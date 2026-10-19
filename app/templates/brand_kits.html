@@ -3,17 +3,59 @@
 <div class="app-layout">
   <aside id="workspace-sidebar" class="sidebar" data-sidebar>
     <a class="wordmark sidebar-wordmark" href="/app"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a>
-    <div class="workspace-switcher"><span class="workspace-monogram" aria-hidden="true">{{ current_user.display_name[0] }}</span><span><strong>{{ current_user.display_name }}</strong><small>{{ 'Studio administrator' if is_admin else 'Client workspace' }}</small></span></div>
-    <nav class="app-nav" aria-label="Workspace navigation"><span class="nav-label">WORKSPACE</span><a class="nav-item" href="/app"><span class="nav-marker"></span>Overview</a><a class="nav-item active" href="/kits" aria-current="page"><span class="nav-marker"></span>Brand Kits <span class="nav-count">{{ kit_count }}</span></a><a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a><span class="nav-label nav-label-spaced">PREFERENCES</span><button class="nav-item" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance</button></nav>
-    <div class="sidebar-bottom"><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit"><span class="nav-marker"></span>Sign out</button></form></div>
+    <nav class="app-nav" aria-label="Main navigation">
+      <a class="nav-item" href="/app" ><span class="nav-marker"></span>Overview</a>
+      <a class="nav-item active" href="/kits" aria-current="page"><span class="nav-marker"></span>Brand Kits <span class="nav-count">{{ kit_count }}</span></a>
+      <a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a>
+      <span class="nav-label nav-label-spaced">PREFERENCES</span>
+      <button class="nav-item" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance</button>
+    </nav>
+    <div class="sidebar-bottom"><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
   </aside>
   <main id="main-content" tabindex="-1" class="app-main">
-    <header class="app-topbar"><button class="mobile-menu-toggle app-mobile-menu" data-sidebar-toggle aria-label="Menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button><div class="breadcrumbs"><a href="/app">Workspace</a><span aria-hidden="true">/</span><strong>Brand Kits</strong></div><div class="topbar-actions"><span class="role-chip">{{ 'Admin' if is_admin else 'Client' }}</span></div></header>
+    <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
     <div class="page-content brand-kits-page">
-      <section class="page-intro"><div><h1>Brand Kits</h1></div><a class="button button-primary" href="#create-kit" data-scroll-create>Create brand kit <span aria-hidden="true">+</span></a></section>
-      {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Your saved brand kits could not be loaded.</strong><p>You can stay in the workspace, but saving new kits requires workspace storage to be available.</p></div>{% endif %}
-      {% if kits %}<section class="kits-section" aria-label="Existing brand kits"><div class="section-title-row"><div><h2>Existing kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div><div class="kit-grid" data-kit-grid>{% for kit in kits %}<article class="kit-card" data-kit-card data-search-text="{{ (kit.brand_name ~ ' ' ~ kit.name ~ ' ' ~ kit.industry)|lower }}"><div class="kit-card-top"><div class="kit-monogram">{{ (kit.brand_name or kit.name)[0]|upper }}</div><span class="status-pill {{ 'status-live' if kit.status == 'published' else 'status-draft' }}">{{ 'Published' if kit.status == 'published' else 'Draft' }}</span></div><h3>{{ kit.brand_name or kit.name }}</h3><p>{{ kit.description or kit.industry or 'Brand identity in progress.' }}</p><div class="kit-card-meta"><span>{{ kit.blocks|length }} blocks</span><span>{{ kit.access_mode|capitalize }} access</span></div><div class="kit-card-footer"><a href="/kits/{{ kit.id }}" class="text-link">Edit kit <span aria-hidden="true">→</span></a>{% if kit.status == 'published' %}<a href="/b/{{ kit.slug }}" class="icon-text-link" target="_blank" rel="noopener">View published <span aria-hidden="true">↗</span></a>{% endif %}<a href="/legal?brand_kit_id={{ kit.id }}" class="icon-text-link">Compliance</a></div></article>{% endfor %}</div><p class="empty-search" data-empty-search hidden>No kits match that search.</p></section>{% elif not workspace_error %}<div class="empty-state brand-kits-empty"><h2>No brand kits yet</h2><p>Create a kit to start defining the brand, assets, and voice.</p><a class="button button-primary" href="#create-kit" data-scroll-create>Create brand kit</a></div>{% endif %}
-      <section id="create-kit" class="create-section"><div class="create-section-copy"><h2>Create a brand kit</h2><p>Start with a project and brand name. Add the audience and category when they're known.</p></div><form method="post" action="/kits/new" class="create-kit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="form-two-col"><div><label for="new-kit-name">Project name</label><input id="new-kit-name" name="name" required maxlength="120" placeholder="e.g. Northline Outdoors"></div><div><label for="new-brand-name">Brand name</label><input id="new-brand-name" name="brand_name" maxlength="120" placeholder="Name shown in the kit"></div></div><div class="form-two-col"><div><label for="new-industry">Category</label><input id="new-industry" name="industry" maxlength="100" placeholder="e.g. Outdoor apparel"></div><div><label for="new-audience">Primary audience</label><input id="new-audience" name="audience" maxlength="240" placeholder="Who is this for?"></div></div><button class="button button-primary" type="submit">Create kit <span aria-hidden="true">→</span></button></form></section>
+      <section class="page-intro"><div><h1>Brand Kits</h1></div></section>
+      {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>You can stay in the workspace, but changes cannot be saved until storage is available.</p></div>{% endif %}
+      {% if kits %}
+      <section class="kits-section" aria-label="Existing brand kits">
+        <div class="section-title-row"><div><h2>Existing kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div>
+        <div class="kit-grid" data-kit-grid>{% for kit in kits %}<article class="kit-card" data-kit-card data-search-text="{{ (kit.brand_name ~ ' ' ~ kit.name ~ ' ' ~ kit.industry)|lower }}"><div class="kit-card-top"><div class="kit-monogram">{{ (kit.brand_name or kit.name)[0]|upper }}</div><span class="status-pill {{ 'status-live' if kit.status == 'published' else 'status-draft' }}">{{ 'Published' if kit.status == 'published' else 'Draft' }}</span></div><h3>{{ kit.brand_name or kit.name }}</h3><p>{{ kit.description or kit.industry or 'Brand identity in progress.' }}</p><div class="kit-card-meta"><span>{{ kit.blocks|length }} blocks</span><span>{{ kit.access_mode|capitalize }} access</span></div><div class="kit-card-footer"><a href="/kits/{{ kit.id }}" class="text-link">Edit kit</a>{% if kit.status == 'published' %}<a href="/b/{{ kit.slug }}" class="icon-text-link" target="_blank" rel="noopener">View published</a>{% endif %}<a href="/legal?brand_kit_id={{ kit.id }}" class="icon-text-link">Compliance</a></div></article>{% endfor %}</div>
+        <p class="empty-search" data-empty-search hidden>No kits match that search.</p>
+      </section>
+      {% elif not workspace_error %}<p class="no-kits-yet">No brand kits yet. Choose the path that best matches where you are with the brand.</p>{% endif %}
+
+      <section id="create-kit" class="creation-pathways" aria-labelledby="create-heading">
+        <div class="pathways-heading"><h2 id="create-heading">Create a brand kit</h2></div>
+        {% if guided_error %}<div class="alert alert-error guided-create-alert" role="status">{{ guided_error }}</div>{% endif %}
+        <div class="pathway-grid">
+          <article class="pathway-card pathway-brief">
+            <h3>I know what I want</h3>
+            <p>Start from your brief. You can refine the identity, copy, and assets in the editor.</p>
+            <form method="post" action="/kits/new" class="create-kit-form pathway-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <div><label for="new-kit-name">Project name</label><input id="new-kit-name" name="name" required maxlength="120" placeholder="e.g. Northline Outdoors"></div>
+              <div><label for="new-brand-name">Brand name</label><input id="new-brand-name" name="brand_name" maxlength="120" placeholder="What should the brand be called?"></div>
+              <div class="form-two-col"><div><label for="new-industry">Category</label><input id="new-industry" name="industry" maxlength="100" placeholder="e.g. Outdoor apparel"></div><div><label for="new-audience">Primary audience</label><input id="new-audience" name="audience" maxlength="240" placeholder="Who is it for?"></div></div>
+              <button class="button button-primary pathway-submit" type="submit">Start with my brief</button>
+            </form>
+          </article>
+          <article class="pathway-card pathway-guided" id="guided-create">
+            <h3>Help me find the direction</h3>
+            <p>Share what you know so far. Gemini will turn it into a starting brand direction you can edit.</p>
+            <form method="post" action="/kits/guided" class="create-kit-form pathway-form" data-guided-create>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <div><label for="guided-project-name">Project name <span class="optional-label">Optional</span></label><input id="guided-project-name" name="project_name" maxlength="120" value="{{ guided_form.get('project_name', '') }}" placeholder="A working name, if you have one"></div>
+              <div><label for="guided-idea">What are you building?</label><textarea id="guided-idea" name="idea" required rows="2" maxlength="1500" placeholder="Describe the product, service, or idea in your own words.">{{ guided_form.get('idea', '') }}</textarea></div>
+              <div><label for="guided-audience">Who do you hope it reaches? <span class="optional-label">Optional</span></label><input id="guided-audience" name="audience" maxlength="300" value="{{ guided_form.get('audience', '') }}" placeholder="People, communities, or customers"></div>
+              <div><label for="guided-difference">What should make it different? <span class="optional-label">Optional</span></label><textarea id="guided-difference" name="difference" rows="2" maxlength="700" placeholder="An experience, belief, product quality, or nothing decided yet.">{{ guided_form.get('difference', '') }}</textarea></div>
+              <div class="form-two-col"><div><label for="guided-feeling">Desired feeling</label><input id="guided-feeling" name="feeling" maxlength="180" value="{{ guided_form.get('feeling', '') }}" placeholder="e.g. optimistic, grounded"></div><div><label for="guided-tone">Tone</label><select id="guided-tone" name="tone"><option value="not sure yet" {{ 'selected' if guided_form.get('tone', 'not sure yet') == 'not sure yet' else '' }}>Not sure yet</option><option value="confident" {{ 'selected' if guided_form.get('tone') == 'confident' else '' }}>Confident</option><option value="warm" {{ 'selected' if guided_form.get('tone') == 'warm' else '' }}>Warm</option><option value="playful" {{ 'selected' if guided_form.get('tone') == 'playful' else '' }}>Playful</option><option value="refined" {{ 'selected' if guided_form.get('tone') == 'refined' else '' }}>Refined</option><option value="bold" {{ 'selected' if guided_form.get('tone') == 'bold' else '' }}>Bold</option></select></div></div>
+              <button class="button button-primary pathway-submit" type="submit">Get guided brand direction</button>
+            </form>
+            <p class="pathway-note">You'll review and edit the generated direction before publishing.</p>
+          </article>
+        </div>
+      </section>
     </div>
   </main>
 </div>

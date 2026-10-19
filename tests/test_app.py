@@ -537,7 +537,7 @@ def test_overview_and_brand_kits_are_separate_work_areas():
     brand_kits = client.get("/kits")
     assert brand_kits.status_code == 200
     assert "Northline Outdoors" in brand_kits.text
-    assert "Create brand kit" in brand_kits.text
+    assert "Create a brand kit" in brand_kits.text
     assert 'action="/kits/new"' in brand_kits.text
     assert 'href="/app#brand-kits"' not in brand_kits.text
 
@@ -581,3 +581,117 @@ def test_legal_entries_are_linked_to_brand_kits_in_schema_and_migration():
     assert "unique (brand_kit_id, standard)" in schema
     assert "add column if not exists brand_kit_id uuid" in migration
     assert "legal_entries_brand_kit_standard_unique" in migration
+
+
+def test_authenticated_app_shell_removes_workspace_header_and_client_badge():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    for route in ("/app", "/kits", "/legal", "/kits/starter-kit-002"):
+        response = client.get(route)
+        assert response.status_code == 200, route
+        html = response.text
+        assert 'class="app-topbar"' not in html
+        assert 'class="role-chip">Client<' not in html
+        assert "Client workspace" not in html
+        assert "<span>Workspace</span>" not in html
+        assert 'class="workspace-switcher"' not in html
+        assert '<button class="nav-item logout-button" type="submit">Sign out</button>' in html
+        assert '<button class="nav-item logout-button" type="submit"><span class="nav-marker"></span>Sign out' not in html
+        assert 'class="mobile-nav-row"' in html
+
+
+def test_brand_kits_has_two_consistent_creation_pathways_and_no_repeated_create_buttons():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/kits")
+    assert response.status_code == 200
+    html = response.text
+    assert "I know what I want" in html
+    assert "Help me find the direction" in html
+    assert 'action="/kits/new"' in html
+    assert 'action="/kits/guided"' in html
+    assert html.count('action="/kits/new"') == 1
+    assert html.count('action="/kits/guided"') == 1
+    assert "Start with my brief" in html
+    assert "Get guided brand direction" in html
+    assert "Gemini will turn it into a starting brand direction" in html
+    assert 'data-guided-create' in html
+    assert 'data-scroll-create' not in html
+    assert 'class="app-topbar"' not in html
+
+
+def test_guided_creation_uses_generated_direction_and_opens_editor(monkeypatch):
+    from app import main as main_module
+
+    if main_module.store.supabase_enabled:
+        return  # This endpoint test uses the local store; provider persistence is tested separately.
+
+    direction = {
+        "project_name": "Orbit Pantry", "brand_name": "Orbit Pantry", "industry": "Food retail",
+        "audience": "Busy home cooks", "description": "A practical pantry brand for everyday cooking.",
+        "tagline": "Make room for good food", "elevator_pitch": "Orbit Pantry makes everyday ingredients easier to choose and use. It brings together practical pantry staples, clear guidance, and thoughtful packaging for busy home cooks who want to make good meals without turning dinner into a project.",
+        "brand_story": "Orbit Pantry helps home cooks make everyday meals feel more considered with useful ingredients and clear guidance.",
+        "color_direction": "Warm cream, tomato red, and deep plum; use red for emphasis and cream for space.",
+        "typography_direction": "Friendly display serif paired with a highly legible sans serif for utility text.",
+        "visual_direction": "Close-up ingredient photography, honest textures, and direct overhead compositions.",
+    }
+    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "unit-test-key")
+    monkeypatch.setattr(main_module, "generate_guided_brand_direction", lambda answers: direction)
+    original_kits = list(main_module.store.kits)
+    client = TestClient(app)
+    try:
+        _sign_in(client, "client", "FormaClient!2026")
+        page = client.get("/kits")
+        csrf = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
+        response = client.post("/kits/guided", data={
+            "csrf_token": csrf, "project_name": "Orbit Pantry", "idea": "A pantry food brand for busy home cooks",
+            "audience": "Busy home cooks", "difference": "Helpful rather than precious",
+            "feeling": "Warm and capable", "tone": "warm",
+        }, follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/kits/")
+        kit_id = response.headers["location"].rsplit("/", 1)[1]
+        kit = main_module.store.get_kit_by_id(kit_id)
+        assert kit is not None
+        assert kit["tagline"] == direction["tagline"]
+        assert kit["elevator_pitch"] == direction["elevator_pitch"]
+        assert any(block["type"] == "Visuals" and block["content"] == direction["visual_direction"] for block in kit["blocks"])
+        editor = client.get(response.headers["location"])
+        assert editor.status_code == 200
+        assert "Orbit Pantry" in editor.text
+    finally:
+        main_module.store.kits[:] = original_kits
+
+
+def test_guided_creation_preserves_answers_when_gemini_is_not_configured(monkeypatch):
+    from app import main as main_module
+    if main_module.store.supabase_enabled:
+        return
+    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "")
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/kits")
+    csrf = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
+    response = client.post("/kits/guided", data={
+        "csrf_token": csrf, "project_name": "Little Comet", "idea": "A playful learning app for young readers",
+        "audience": "Young readers", "difference": "Stories that adapt", "feeling": "Curious", "tone": "playful",
+    }, follow_redirects=False)
+    assert response.status_code == 303
+    page_after = client.get(response.headers["location"])
+    assert page_after.status_code == 200
+    assert "Guided creation is not connected right now" in page_after.text
+    assert 'value="Little Comet"' in page_after.text
+    assert "A playful learning app for young readers" in page_after.text
+
+
+def test_legal_empty_state_offers_create_brand_kit_not_open_brand_kits(monkeypatch):
+    from app import main as main_module
+    monkeypatch.setattr(main_module.store, "list_kits", lambda user: [])
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/legal")
+    assert response.status_code == 200
+    assert "No brand work to assess yet" in response.text
+    assert 'href="/kits#create-kit"' in response.text
+    assert "Create brand kit" in response.text
+    assert "Open Brand Kits" not in response.text

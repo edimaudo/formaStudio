@@ -3,12 +3,11 @@
 <div class="app-layout">
   <aside id="workspace-sidebar" class="sidebar" data-sidebar>
     <a class="wordmark sidebar-wordmark" href="/app"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a>
-    <div class="workspace-switcher"><span class="workspace-monogram" aria-hidden="true">{{ current_user.display_name[0] }}</span><span><strong>{{ current_user.display_name }}</strong><small>{{ 'Studio administrator' if is_admin else 'Client workspace' }}</small></span></div>
-    <nav class="app-nav" aria-label="Workspace navigation"><span class="nav-label">WORKSPACE</span><a class="nav-item active" href="/app" aria-current="page"><span class="nav-marker"></span>Overview</a><a class="nav-item" href="/kits"><span class="nav-marker"></span>Brand Kits</a><a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a><span class="nav-label nav-label-spaced">PREFERENCES</span><button class="nav-item" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance</button></nav>
-    <div class="sidebar-bottom"><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit"><span class="nav-marker"></span>Sign out</button></form></div>
+    <nav class="app-nav" aria-label="Main navigation"><a class="nav-item active" href="/app" aria-current="page"><span class="nav-marker"></span>Overview</a><a class="nav-item" href="/kits"><span class="nav-marker"></span>Brand Kits</a><a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a><span class="nav-label nav-label-spaced">PREFERENCES</span><button class="nav-item" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance</button></nav>
+    <div class="sidebar-bottom"><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
   </aside>
-  <main id="main-content" tabindex="-1" class="app-main">
-    <header class="app-topbar"><button class="mobile-menu-toggle app-mobile-menu" data-sidebar-toggle aria-label="Menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button><div class="breadcrumbs"><span>Workspace</span><span aria-hidden="true">/</span><strong>Overview</strong></div><div class="topbar-actions"><span class="role-chip">{{ 'Admin' if is_admin else 'Client' }}</span></div></header>
+  <main id="main-content" tabindex="-1" class="app-main"><div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
+    
     <div class="page-content overview-page">
       <section class="page-intro overview-intro"><div><h1>Overview</h1></div></section>
       {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Your saved brands could not be loaded.</strong><p>Your sign-in is active. Workspace records will appear here when storage is available.</p></div>{% endif %}
