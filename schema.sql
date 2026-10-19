@@ -30,13 +30,14 @@ create index if not exists brand_kits_status_idx on public.brand_kits (status);
 create table if not exists public.legal_entries (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null,
+  brand_kit_id uuid not null references public.brand_kits(id) on delete cascade,
   standard text not null check (standard in ('GDPR', 'SOC 2 Type II', 'ISO 27001')),
   status text not null default 'not_configured' check (status in ('not_configured', 'in_progress', 'documented', 'verified')),
   document_url text not null default '',
   access_mode text not null default 'request' check (access_mode in ('public', 'request')),
   notes text not null default '',
   updated_at timestamptz not null default now(),
-  unique (owner_id, standard)
+  unique (brand_kit_id, standard)
 );
 
 create table if not exists public.legal_access_requests (
@@ -80,6 +81,6 @@ notify pgrst, 'reload schema';
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'brand-assets', 'brand-assets', false, 15728640,
-  array['image/png','image/jpeg','image/webp','image/gif','application/pdf','video/mp4','video/webm','model/gltf-binary','model/gltf+json','font/woff','font/woff2','font/ttf','font/otf','image/svg+xml','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.presentationml.presentation']
+  array['image/png','image/jpeg','image/webp','image/gif','application/pdf','video/mp4','video/webm','model/gltf-binary','model/gltf+json','font/woff','font/woff2','font/ttf','font/otf','image/svg+xml','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/vtt']
 )
 on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;

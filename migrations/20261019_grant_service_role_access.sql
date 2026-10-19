@@ -14,3 +14,8 @@ grant all privileges on table
   to service_role;
 
 notify pgrst, 'reload schema';
+
+-- Keep the private asset bucket compatible with optional video captions.
+update storage.buckets
+set allowed_mime_types = array(select distinct unnest(coalesce(allowed_mime_types, '{}'::text[]) || array['text/vtt']))
+where id = 'brand-assets';

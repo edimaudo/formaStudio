@@ -351,11 +351,13 @@ class DataStore:
                     {"id": "n-visuals", "type": "Visuals", "title": "Image direction", "content": "Natural light, worn-in materials, trail details, honest scale, and people in motion.", "asset_url": ""},
                 ], "created_at": now_iso(), "updated_at": now_iso(),
             })
-        for user in self.users:
+        # Compliance work is scoped to a specific brand kit, not merely to a login.
+        for kit in self.kits:
             for standard in LEGAL_STANDARDS:
                 self.legal_entries.append({
-                    "id": f"{user['id']}-{slugify(standard)}", "owner_id": user["id"],
-                    "standard": standard, "status": "not_configured", "document_url": "",
+                    "id": str(uuid.uuid4()), "owner_id": kit["owner_id"],
+                    "brand_kit_id": kit["id"], "standard": standard,
+                    "status": "not_configured", "document_url": "",
                     "access_mode": "request", "notes": "", "updated_at": now_iso(),
                 })
 
@@ -455,14 +457,42 @@ class DataStore:
                         asset.unlink(missing_ok=True)
                 asset_dir.rmdir()
 
-    def list_legal(self, user: dict[str, Any]) -> list[dict[str, Any]]:
+    def list_legal(self, user: dict[str, Any], brand_kit_id: str | None = None) -> list[dict[str, Any]]:
         if self.supabase_enabled:
-            rows = self._request("GET", "legal_entries", params={"select": "*", "order": "standard.asc"}) or []
+            params: dict[str, Any] = {"select": "*", "order": "standard.asc"}
+            if brand_kit_id:
+                params["brand_kit_id"] = f"eq.{brand_kit_id}"
+            rows = self._request("GET", "legal_entries", params=params) or []
         else:
             rows = self.legal_entries
+            if brand_kit_id:
+                rows = [entry for entry in rows if str(entry.get("brand_kit_id")) == str(brand_kit_id)]
         if user["role"] != "admin":
-            rows = [entry for entry in rows if entry.get("owner_id") == user["id"]]
+            rows = [entry for entry in rows if str(entry.get("owner_id")) == str(user["id"])]
         return rows
+
+    def ensure_legal_entries_for_kit(self, kit: dict[str, Any]) -> list[dict[str, Any]]:
+        """Ensure the selected brand has a compliance work item for each standard."""
+        existing = self.list_legal({"id": kit["owner_id"], "role": "admin"}, str(kit["id"]))
+        existing_standards = {str(row.get("standard")) for row in existing}
+        missing = [standard for standard in LEGAL_STANDARDS if standard not in existing_standards]
+        if not missing:
+            return existing
+        payload = [{
+            "owner_id": kit["owner_id"], "brand_kit_id": kit["id"],
+            "standard": standard, "status": "not_configured", "document_url": "",
+            "access_mode": "request", "notes": "", "updated_at": now_iso(),
+        } for standard in missing]
+        if self.supabase_enabled:
+            self._request(
+                "POST", "legal_entries",
+                params={"on_conflict": "brand_kit_id,standard", "select": "*"},
+                payload=payload, prefer="resolution=ignore-duplicates,return=representation",
+            )
+            return self.list_legal({"id": kit["owner_id"], "role": "admin"}, str(kit["id"]))
+        for item in payload:
+            self.legal_entries.append({"id": str(uuid.uuid4()), **item})
+        return self.list_legal({"id": kit["owner_id"], "role": "admin"}, str(kit["id"]))
 
     def update_legal(self, entry_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
         changes["updated_at"] = now_iso()
@@ -700,30 +730,40 @@ def dashboard(request: Request) -> Any:
     workspace_error = None
     try:
         if APP_ENV == "production" and not store.supabase_enabled:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Workspace storage settings are incomplete or invalid. Check SUPABASE_URL and the "
-                    "server-only SUPABASE_SECRET_KEY in hosting settings. Your login remains active."
-                    if SUPABASE_CONFIG_ERROR else
-                    "Workspace storage is not configured. Add SUPABASE_URL and a server-only "
-                    "SUPABASE_SECRET_KEY to enable persistent brand kits and assets. Your login remains active."
-                ),
-            )
+            raise HTTPException(status_code=503, detail="Workspace storage is not available.")
         kits = store.list_kits(user)
     except HTTPException as exc:
         if exc.status_code != 503:
             raise
-        # Keep the user signed in and render the dashboard. Persistence may be
-        # unavailable, but that must not be represented as an authentication failure.
         kits = []
-        workspace_error = str(exc.detail)
-    return render(request, "dashboard.html", {"page_title": "Your studio", "kits": kits,
-                  "users": store.list_users() if user["role"] == "admin" else [],
-                  "is_admin": user["role"] == "admin", "kit_count": len(kits),
-                  "published_count": sum(1 for k in kits if k.get("status") == "published"),
-                  "workspace_error": workspace_error})
+        workspace_error = "Saved brand information is temporarily unavailable. Your sign-in is active."
+    return render(request, "dashboard.html", {
+        "page_title": "Overview", "kits": kits,
+        "users": store.list_users() if user["role"] == "admin" else [],
+        "is_admin": user["role"] == "admin", "kit_count": len(kits),
+        "published_count": sum(1 for kit in kits if kit.get("status") == "published"),
+        "workspace_error": workspace_error,
+    })
 
+
+@app.get("/kits", response_class=HTMLResponse)
+def brand_kits_page(request: Request) -> Any:
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login?next=/kits", status_code=303)
+    workspace_error = None
+    try:
+        if APP_ENV == "production" and not store.supabase_enabled:
+            raise HTTPException(status_code=503, detail="Workspace storage is not available.")
+        kits = store.list_kits(user)
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        kits, workspace_error = [], "Saved brand kits are temporarily unavailable. You can remain in the workspace while storage is restored."
+    return render(request, "brand_kits.html", {
+        "page_title": "Brand Kits", "kits": kits, "is_admin": user["role"] == "admin",
+        "kit_count": len(kits), "workspace_error": workspace_error,
+    })
 
 @app.post("/kits/new")
 async def create_kit(request: Request) -> RedirectResponse:
@@ -1151,14 +1191,42 @@ async def cultural_signals(request: Request, payload: CultureRequest) -> JSONRes
 
 
 @app.get("/legal", response_class=HTMLResponse)
-def legal_page(request: Request) -> Any:
+def legal_page(request: Request, brand_kit_id: str = "") -> Any:
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login?next=/legal", status_code=303)
-    entries = store.list_legal(user)
-    requests = store.list_legal_requests() if user["role"] == "admin" else store.list_legal_requests(str(user["id"]))
-    return render(request, "legal.html", {"page_title": "Legal Kit", "entries": entries, "is_admin": user["role"] == "admin", "access_requests": requests})
-
+    legal_data_error = False
+    try:
+        kits = store.list_kits(user)
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        kits, legal_data_error = [], True
+    selected_kit = next((kit for kit in kits if str(kit.get("id")) == str(brand_kit_id)), None) if brand_kit_id else None
+    if brand_kit_id and not selected_kit:
+        raise HTTPException(status_code=404, detail="Brand not found.")
+    if selected_kit is None and kits:
+        selected_kit = kits[0]
+    entries: list[dict[str, Any]] = []
+    requests: list[dict[str, Any]] = []
+    if selected_kit and not legal_data_error:
+        try:
+            entries = store.ensure_legal_entries_for_kit(selected_kit)
+            all_requests = store.list_legal_requests(str(selected_kit.get("owner_id")))
+            entry_ids = {str(entry.get("id")) for entry in entries}
+            requests = [row for row in all_requests if str(row.get("entry_id")) in entry_ids]
+        except HTTPException as exc:
+            if exc.status_code != 503:
+                raise
+            logger.warning("Brand-level compliance data unavailable for brand_kit_id=%s", selected_kit.get("id"))
+            entries, requests, legal_data_error = [], [], True
+    completed = sum(1 for entry in entries if entry.get("status") in {"documented", "verified"})
+    return render(request, "legal.html", {
+        "page_title": "Legal Kit", "entries": entries, "is_admin": user["role"] == "admin",
+        "access_requests": requests, "legal_data_error": legal_data_error,
+        "brand_kits": kits, "selected_kit": selected_kit,
+        "compliance_completed": completed, "compliance_total": len(LEGAL_STANDARDS),
+    })
 
 class LegalUpdate(BaseModel):
     status: str
@@ -1186,24 +1254,30 @@ async def update_legal_entry(request: Request, entry_id: str, payload: LegalUpda
 
 
 @app.get("/legal/share/{username}", response_class=HTMLResponse)
-def public_legal(request: Request, username: str, verify: str = "", token: str = "", message: str = "") -> HTMLResponse:
-    users = store.list_users()
-    owner = next((u for u in users if u.get("username", "").casefold() == username.casefold()), None)
+def public_legal(request: Request, username: str, brand_kit_id: str = "", verify: str = "", token: str = "", message: str = "") -> HTMLResponse:
+    owner = next((u for u in store.list_users() if u.get("username", "").casefold() == username.casefold()), None)
     if not owner:
         raise HTTPException(status_code=404, detail="Legal Kit not found.")
-    entries = [e for e in store.list_legal({"id": owner["id"], "role": "client"}) if str(e.get("owner_id")) == str(owner["id"])]
+    owner_kits = [kit for kit in store.list_kits(owner) if str(kit.get("owner_id")) == str(owner["id"])]
+    selected_kit = next((kit for kit in owner_kits if str(kit.get("id")) == str(brand_kit_id)), None) if brand_kit_id else (owner_kits[0] if owner_kits else None)
+    if not selected_kit:
+        raise HTTPException(status_code=404, detail="Brand Kit not found.")
+    entries = store.ensure_legal_entries_for_kit(selected_kit)
     requests = store.list_legal_requests(str(owner["id"]))
     for entry in entries:
         current_hash = request.session.get(f"legal_access_{entry.get('id')}", "")
         entry["viewer_approved"] = any(str(r.get("entry_id")) == str(entry.get("id")) and r.get("status") == "approved" and hashlib.sha256(str(r.get("email", "")).lower().encode()).hexdigest() == current_hash for r in requests)
         entry["viewer_pending"] = any(str(r.get("entry_id")) == str(entry.get("id")) and r.get("status") == "pending" and hashlib.sha256(str(r.get("email", "")).lower().encode()).hexdigest() == current_hash for r in requests)
-    return render(request, "legal_shared.html", {"page_title": f"{owner.get('display_name', owner['username'])} · Legal Kit",
-                  "owner": owner, "entries": entries, "public_entries": [e for e in entries if e.get("access_mode") == "public" and e.get("document_url")],
-                  "verify_token": token if verify == "1" else "", "message": message})
-
+    return render(request, "legal_shared.html", {
+        "page_title": f"{selected_kit.get('brand_name', selected_kit['name'])} · Legal Kit",
+        "owner": owner, "selected_kit": selected_kit, "brand_kit_id": selected_kit["id"],
+        "entries": entries,
+        "public_entries": [entry for entry in entries if entry.get("access_mode") == "public" and entry.get("document_url")],
+        "verify_token": token if verify == "1" else "", "message": message,
+    })
 
 @app.post("/legal/share/{username}/request")
-async def request_legal_access(request: Request, username: str) -> RedirectResponse:
+async def request_legal_access(request: Request, username: str, brand_kit_id: str = "") -> RedirectResponse:
     await check_csrf(request)
     form = await request.form()
     owner = next((u for u in store.list_users() if u.get("username", "").casefold() == username.casefold()), None)
@@ -1211,53 +1285,55 @@ async def request_legal_access(request: Request, username: str) -> RedirectRespo
         raise HTTPException(status_code=404, detail="Legal Kit not found.")
     entry_id = str(form.get("entry_id", ""))
     entry = store.get_legal_entry(entry_id)
+    if entry and brand_kit_id and str(entry.get("brand_kit_id")) != str(brand_kit_id):
+        entry = None
     if not entry or str(entry.get("owner_id")) != str(owner["id"]) or entry.get("access_mode") != "request":
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=access_unavailable", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=access_unavailable", status_code=303)
     email = str(form.get("email", "")).strip().lower()
     name = str(form.get("requester_name", "")).strip()[:140]
     reason = str(form.get("reason", "")).strip()[:1000]
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=invalid_email", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=invalid_email", status_code=303)
     if not store.supabase_enabled or not SUPABASE_AUTH_KEY:
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=email_verification_unavailable", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=email_verification_unavailable", status_code=303)
     try:
         sent = send_supabase_email_otp(email, create_user=True)
     except HTTPException:
         sent = False
     if not sent:
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=email_send_failed", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=email_send_failed", status_code=303)
     verification_token = secrets.token_urlsafe(24)
     store.create_legal_request_draft(entry, email, name, reason, verification_token)
     request.session[f"pending_legal_email_{verification_token}"] = email
-    return RedirectResponse(f"/legal/share/{quote(username)}?verify=1&token={quote(verification_token)}&message=verification_sent", status_code=303)
+    return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&verify=1&token={quote(verification_token)}&message=verification_sent", status_code=303)
 
 
 @app.post("/legal/share/{username}/verify")
-async def verify_legal_access_request(request: Request, username: str) -> RedirectResponse:
+async def verify_legal_access_request(request: Request, username: str, brand_kit_id: str = "") -> RedirectResponse:
     await check_csrf(request)
     form = await request.form()
     token = str(form.get("request_token", "")).strip()
     code = str(form.get("code", "")).strip()
     pending = store.get_legal_request_by_token(token)
     if not pending or not secrets.compare_digest(str(pending.get("verification_token", "")), token):
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=request_expired", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=request_expired", status_code=303)
     owner = next((u for u in store.list_users() if str(u.get("id")) == str(pending.get("owner_id"))), None)
     if not owner or owner.get("username", "").casefold() != username.casefold():
-        return RedirectResponse(f"/legal/share/{quote(username)}?message=request_expired", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=request_expired", status_code=303)
     email = str(pending.get("email", "")).lower()
     pending_email = str(request.session.get(f"pending_legal_email_{token}", "")).lower()
     if (email != pending_email or not re.fullmatch(r"\d{6}", code)
             or not verify_supabase_email_otp(email, code)):
-        return RedirectResponse(f"/legal/share/{quote(username)}?verify=1&token={quote(token)}&message=invalid_code", status_code=303)
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&verify=1&token={quote(token)}&message=invalid_code", status_code=303)
     request.session.pop(f"pending_legal_email_{token}", None)
     entry = store.get_legal_entry(str(pending["entry_id"]))
-    if not entry:
-        raise HTTPException(status_code=404, detail="Legal Kit entry not found.")
+    if not entry or (brand_kit_id and str(entry.get("brand_kit_id")) != str(brand_kit_id)):
+        return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message=request_expired", status_code=303)
     access_request = store.create_legal_request(entry, email, str(pending.get("requester_name", "")), str(pending.get("reason", "")))
     # Clear the one-time request token after the email identity is verified, while preserving approval state.
     store.resolve_legal_request(str(access_request["id"]), "approved" if access_request.get("status") == "approved" else "pending")
     request.session[f"legal_access_{entry['id']}"] = hashlib.sha256(email.encode()).hexdigest()
-    return RedirectResponse(f"/legal/share/{quote(username)}?message={'already_approved' if access_request.get('status') == 'approved' else 'request_submitted'}", status_code=303)
+    return RedirectResponse(f"/legal/share/{quote(username)}?brand_kit_id={quote(brand_kit_id, safe='')}&message={'already_approved' if access_request.get('status') == 'approved' else 'request_submitted'}", status_code=303)
 
 
 @app.put("/api/legal/requests/{request_id}")
@@ -1276,13 +1352,30 @@ async def review_legal_access_request(request: Request, request_id: str, payload
     return JSONResponse({"ok": True, "request": updated})
 
 
+def user_facing_error_detail(detail: Any, status_code: int) -> str:
+    """Keep provider and schema diagnostics in logs, not in the product UI."""
+    raw = detail if isinstance(detail, str) else "The request could not be completed."
+    lowered = raw.lower()
+    looks_like_storage_error = any(token in lowered for token in (
+        "supabase", "workspace database", "workspace tables", "data api",
+        "schema cache", "service_role", "public.brand_kits", "public.legal_entries",
+        "supabase_url", "supabase_secret_key",
+    ))
+    if status_code >= 500 and looks_like_storage_error:
+        return "Workspace data is temporarily unavailable. Your sign-in is unaffected. Please try again later."
+    return raw
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    raw_detail = exc.detail if isinstance(exc.detail, str) else "The request could not be completed."
+    detail = user_facing_error_detail(raw_detail, exc.status_code)
+    if detail != raw_detail:
+        logger.warning("Suppressed technical storage detail in UI: path=%s status=%s", request.url.path, exc.status_code)
     if request.url.path.startswith("/api/"):
-        detail = exc.detail if isinstance(exc.detail, str) else "The request could not be completed."
         return JSONResponse({"ok": False, "detail": detail}, status_code=exc.status_code)
     return templates.TemplateResponse(request=request, name="error.html", context={
         "request": request, "app_name": APP_NAME, "current_user": get_current_user(request),
         "csrf_token": csrf_token(request), "status_code": exc.status_code,
-        "message": exc.detail if isinstance(exc.detail, str) else "The request could not be completed.",
+        "message": detail,
     }, status_code=exc.status_code)

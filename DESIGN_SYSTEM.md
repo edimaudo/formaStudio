@@ -6,7 +6,7 @@ Forma Studio uses one shared visual system across the public landing page, authe
 
 - **Display type:** a system-available editorial serif stack for headings and brand moments.
 - **Interface type:** a sans-serif stack for navigation, forms, metadata, and long-form reading.
-- **Color:** warm mineral paper and off-white surfaces; deep forest green for primary action; muted ink for text; apricot for occasional warmth. A coordinated dark theme remaps the same semantic tokens.
+- **Color:** warm mineral paper and off-white surfaces; deep forest green for primary action; muted ink for text; apricot for occasional warmth. The dark theme uses slate surfaces and a lavender-blue accent rather than green; success and warning colors retain status meaning.
 - **Spacing:** rem-based spacing with responsive `clamp()` sizing, so layout and components scale along with the selected text size.
 - **Shapes:** restrained corner radii and thin borders; no decorative eyebrow labels above headings.
 - **Components:** shared buttons, cards, form controls, status treatments, page headers, navigation, and brand-kit content blocks.
@@ -40,3 +40,9 @@ These are accessibility-minded implementation choices, not a claim of formal WCA
 ## Core brand messaging
 
 The brand editor includes persistent tagline and elevator-pitch fields alongside the project brief. Each field has a dedicated generation action, remains editable after generation, and is saved with the kit. Published kits display both fields when they are populated. Generated text is a draft, must be reviewed by the brand owner, and should not introduce claims unsupported by the brief.
+
+## Workspace information architecture
+
+- **Overview** is a summary of brands already created and their publication state. It does not include brand-creation forms.
+- **Brand Kits** is the distinct management page for finding, creating, and editing kits.
+- **Legal Kit** selects a brand and tracks its GDPR, SOC 2 Type II, and ISO 27001 evidence/status for that brand, rather than presenting a detached list of owner-level standards.

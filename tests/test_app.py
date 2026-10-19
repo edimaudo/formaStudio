@@ -144,7 +144,7 @@ def test_accessibility_theme_tokens_meet_contrast_thresholds() -> None:
     assert contrast("#005fcc", "#f5f4ee") >= 3.0  # focus indicator on light surface
     assert contrast("#7f8b81", "#f5f4ee") >= 3.0  # light input/control borders
     assert contrast("#ffd166", "#151d19") >= 3.0  # focus indicator in dark theme
-    assert contrast("#6c7b70", "#1e2923") >= 3.0  # dark input/control borders
+    assert contrast("#78819b", "#202330") >= 3.0  # dark input/control borders
 
 
 def test_video_blocks_support_uploaded_webvtt_captions() -> None:
@@ -425,8 +425,9 @@ def test_workspace_database_error_page_explains_login_is_separate():
     try:
         error = client.get("/__test_workspace_error")
         assert error.status_code == 503
-        assert "workspace data connection issue, not a username or password error" in error.text
-        assert "Vercel function logs" in error.text
+        assert "Workspace data is temporarily unavailable. Your sign-in is unaffected." in error.text
+        assert "Run schema.sql" not in error.text
+        assert "Vercel function logs" not in error.text
     finally:
         main_module.app.router.routes[:] = [route for route in main_module.app.router.routes if getattr(route, "path", None) != "/__test_workspace_error"]
 
@@ -480,7 +481,103 @@ def test_dashboard_keeps_local_login_session_when_workspace_database_fails(monke
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/app")
     assert response.status_code == 200
-    assert "You are signed in. Workspace data is unavailable." in response.text
-    assert "this warning only affects saved kits and persistent workspace data." in response.text
+    assert "Your saved brands could not be loaded." in response.text
+    assert "Your sign-in is active." in response.text
+    assert "Run schema.sql" not in response.text
+    assert "Supabase's Data API" not in response.text
     assert "create-kit-form" not in response.text
+    assert "Make it coherent." not in response.text
+    assert "Keep the idea, identity, and handoff connected." not in response.text
 
+
+
+def test_legal_page_hides_raw_supabase_schema_diagnostics(monkeypatch):
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    def missing_legal_table(_user, brand_kit_id=None):
+        raise HTTPException(
+            status_code=503,
+            detail=("Supabase's Data API cannot find the workspace table public.legal_entries. "
+                    "Run schema.sql in the SQL Editor of the same formastudio project configured in Vercel."),
+        )
+
+    monkeypatch.setattr(main_module.store, "list_legal", missing_legal_table)
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/legal")
+
+    assert response.status_code == 200
+    assert "Compliance records are temporarily unavailable." in response.text
+    assert "Your sign-in is active." in response.text
+    assert "Supabase's Data API" not in response.text
+    assert "public.legal_entries" not in response.text
+    assert "Run schema.sql" not in response.text
+    assert "20261019_grant_service_role_access.sql" not in response.text
+
+
+def test_storage_errors_are_sanitized_for_api_and_html_pages():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+    assert "def user_facing_error_detail" in source
+    assert "Workspace data is temporarily unavailable. Your sign-in is unaffected. Please try again later." in source
+
+
+def test_overview_and_brand_kits_are_separate_work_areas():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    overview = client.get("/app")
+    assert overview.status_code == 200
+    assert "Brands you've created" in overview.text
+    assert "Northline Outdoors" in overview.text
+    assert "New brand kit" not in overview.text
+    assert 'id="brand-kits"' not in overview.text
+    assert 'href="/kits"' in overview.text
+
+    brand_kits = client.get("/kits")
+    assert brand_kits.status_code == 200
+    assert "Northline Outdoors" in brand_kits.text
+    assert "Create brand kit" in brand_kits.text
+    assert 'action="/kits/new"' in brand_kits.text
+    assert 'href="/app#brand-kits"' not in brand_kits.text
+
+
+def test_legal_checklist_is_scoped_to_a_selected_brand():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/legal?brand_kit_id=starter-kit-002")
+    assert response.status_code == 200
+    assert "Northline Outdoors" in response.text
+    assert "Brand under review" in response.text
+    assert "Privacy notice and lawful-basis or consent materials" in response.text
+    assert "Evidence status" in response.text
+    assert "You are not" not in response.text
+    assert "Make it coherent." not in response.text
+    assert "Keep the idea, identity, and handoff connected." not in response.text
+
+
+def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    for route in ("/app", "/kits", "/legal"):
+        client = TestClient(app)
+        _sign_in(client, "client", "FormaClient!2026")
+        response = client.get(route)
+        assert response.status_code == 200
+        assert "avatar-button" not in response.text
+        assert "switcher-chevrons" not in response.text
+        assert "Brand systems should make good decisions easier." not in response.text
+    settings = (root / "app/templates/settings_modal.html").read_text(encoding="utf-8")
+    assert "Brand systems should make good decisions easier." not in settings
+    assert "data-font-preview" not in settings
+
+
+def test_legal_entries_are_linked_to_brand_kits_in_schema_and_migration():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    schema = (root / "schema.sql").read_text(encoding="utf-8").lower()
+    migration = (root / "migrations/20261019_compliance_by_brand_kit.sql").read_text(encoding="utf-8").lower()
+    assert "brand_kit_id uuid not null references public.brand_kits(id)" in schema
+    assert "unique (brand_kit_id, standard)" in schema
+    assert "add column if not exists brand_kit_id uuid" in migration
+    assert "legal_entries_brand_kit_standard_unique" in migration
