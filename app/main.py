@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -28,6 +29,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 load_dotenv()
+logger = logging.getLogger("forma_studio.database")
 
 BASE_DIR = Path(__file__).resolve().parent
 # Uploaded brand assets use Supabase Storage in deployed environments. The local
@@ -230,12 +232,54 @@ class DataStore:
         url = f"{SUPABASE_URL}/rest/v1/{table}"
         try:
             response = httpx.request(method, url, headers=headers, params=params, json=payload, timeout=8.0)
+        except httpx.TimeoutException as exc:
+            logger.warning("Supabase REST timeout: method=%s table=%s", method, table)
+            raise HTTPException(
+                status_code=503,
+                detail="The workspace database did not respond. Check the Supabase project status and the server-side connection settings in Vercel.",
+            ) from exc
+        except httpx.RequestError as exc:
+            logger.warning("Supabase REST connection error: method=%s table=%s error_type=%s", method, table, type(exc).__name__)
+            raise HTTPException(
+                status_code=503,
+                detail="Forma Studio could not reach the workspace database. Check SUPABASE_URL and the Supabase project status.",
+            ) from exc
+
+        try:
             response.raise_for_status()
-            if not response.content:
-                return None
+        except httpx.HTTPStatusError as exc:
+            status = response.status_code
+            error_code = "unknown"
+            try:
+                error_body = response.json()
+                if isinstance(error_body, dict):
+                    error_code = str(error_body.get("code") or error_body.get("error_code") or "unknown")[:64]
+            except ValueError:
+                pass
+            # Log the safe status and provider error code for diagnosis. Never log headers,
+            # credentials, or the response body, which may contain sensitive details.
+            logger.warning("Supabase REST rejected request: method=%s table=%s status=%s code=%s", method, table, status, error_code)
+            if status == 401:
+                detail = "Supabase rejected the server-side database key. Check that SUPABASE_URL matches the project and SUPABASE_SECRET_KEY contains its current Secret key (or use the legacy service-role key in its dedicated variable)."
+            elif status == 403:
+                detail = "Supabase denied access to the workspace tables. Confirm that schema.sql has been applied and that the server-only database key has access to the tables. A publishable key cannot replace the server-only key."
+            elif status == 404 or error_code in {"PGRST205", "42P01"}:
+                detail = "Required workspace tables are missing from Supabase. Run schema.sql in the SQL Editor of your formastudio project, then run scripts/seed_accounts.py to create the workspace profiles."
+            elif status == 400 or error_code in {"PGRST204", "42703"}:
+                detail = "The workspace database schema does not match this version of Forma Studio. Apply schema.sql and the core-messaging migration, then redeploy."
+            elif status >= 500:
+                detail = "Supabase encountered an error while loading workspace data. Check your Supabase project status and its Database/API logs."
+            else:
+                detail = "Supabase rejected the workspace database request. Check the server-side key, schema, and the status/code in the Vercel function logs."
+            raise HTTPException(status_code=503, detail=detail) from exc
+
+        if not response.content:
+            return None
+        try:
             return response.json()
-        except httpx.HTTPError as exc:
-            raise HTTPException(status_code=503, detail="The workspace database is temporarily unavailable.") from exc
+        except ValueError as exc:
+            logger.warning("Supabase REST returned non-JSON data: method=%s table=%s status=%s", method, table, response.status_code)
+            raise HTTPException(status_code=503, detail="Supabase returned an unexpected response while loading workspace data. Check the Supabase API logs.") from exc
 
     def _seed_starter_content(self) -> None:
         kit_id = "starter-kit-001"
@@ -297,11 +341,15 @@ class DataStore:
 
     def list_kits(self, user: dict[str, Any]) -> list[dict[str, Any]]:
         if self.supabase_enabled:
-            rows = self._request("GET", "brand_kits", params={"select": "*", "order": "updated_at.desc"}) or []
-        else:
-            rows = self.kits
+            params = {"select": "*", "order": "updated_at.desc"}
+            # Query only the signed-in client's records. Do not load other clients' kits
+            # and then filter them in Python after the privileged server-side request.
+            if user["role"] != "admin":
+                params["owner_id"] = f"eq.{user['id']}"
+            return self._request("GET", "brand_kits", params=params) or []
+        rows = self.kits
         if user["role"] != "admin":
-            rows = [kit for kit in rows if kit.get("owner_id") == user["id"]]
+            rows = [kit for kit in rows if str(kit.get("owner_id")) == str(user["id"])]
         return rows
 
     def get_kit_by_id(self, kit_id: str) -> dict[str, Any] | None:

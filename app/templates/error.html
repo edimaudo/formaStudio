@@ -1,4 +1,13 @@
 {% extends "base.html" %}
 {% block body %}
-<header class="shared-header"><a class="wordmark" href="/"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a></header><main id="main-content" tabindex="-1" class="error-page shell"><h1>{{ message }}</h1><p>The page may have moved, or your access may need to be refreshed.</p><a class="button button-primary" href="/app">Return to the studio</a></main>
+<header class="shared-header"><a class="wordmark" href="/"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a></header>
+<main id="main-content" tabindex="-1" class="error-page shell">
+  <h1>{{ message }}</h1>
+  {% if 'workspace database' in message|lower or 'workspace tables' in message|lower or 'supabase' in message|lower %}
+  <p>This is a workspace data connection issue, not a username or password error. Review the guidance above and check the Vercel function logs for the database status and error code.</p>
+  {% else %}
+  <p>The page may have moved, or your access may need to be refreshed.</p>
+  {% endif %}
+  <a class="button button-primary" href="/app">Return to the studio</a>
+</main>
 {% endblock %}

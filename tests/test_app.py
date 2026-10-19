@@ -1,6 +1,7 @@
 import re
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.main import BLOCK_TYPES, LEGAL_STANDARDS, DataStore, app, password_hash, slugify, verify_password, store
 
@@ -325,3 +326,123 @@ def test_builtin_application_credentials_work_in_production_without_login_env_va
         assert response.status_code == 303
         assert response.headers["location"] == "/app"
         assert main_module.store.get_user(username)["role"] == role
+
+
+def test_landing_steps_have_no_empty_number_column_or_list_markers():
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    response = TestClient(app).get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-labelledby="how-it-works-heading"' in html
+    assert '<div class="steps-list">' in html
+    assert '<ol class="steps-list"' not in html
+    assert '<article class="step">' in html
+    css = (root / "app" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+    assert "grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr)" in css
+    assert ".steps-inner h2 { max-width: none;" in css
+    assert "grid-template-columns: 2.5rem 1fr" not in css
+
+
+def test_skip_link_is_visually_hidden_until_keyboard_focus():
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    css = (root / "app" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+    landing = TestClient(app).get("/").text
+    assert 'class="skip-link" href="#main-content">Skip to main content</a>' in landing
+    assert "clip-path: inset(50%)" in css
+    assert ".skip-link:focus, .skip-link:focus-visible" in css
+    assert "clip-path: none" in css
+
+
+def test_sign_in_page_does_not_show_living_identity_system_label():
+    html = TestClient(app).get("/login").text
+    assert "A living identity system" not in html
+    assert "clear point of view" in html.lower()
+
+
+def test_supabase_missing_table_error_is_actionable(monkeypatch, caplog):
+    import httpx
+    import pytest
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "SUPABASE_URL", "https://formastudio.supabase.co")
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit_test")
+
+    def missing_table(*args, **kwargs):
+        return httpx.Response(
+            404,
+            json={"code": "PGRST205", "message": "Could not find the table 'public.brand_kits' in the schema cache"},
+            request=httpx.Request("GET", "https://formastudio.supabase.co/rest/v1/brand_kits"),
+        )
+
+    monkeypatch.setattr(main_module.httpx, "request", missing_table)
+    data_store = main_module.DataStore.__new__(main_module.DataStore)
+    with pytest.raises(HTTPException) as error:
+        data_store._request("GET", "brand_kits")
+    assert error.value.status_code == 503
+    assert "Run schema.sql" in error.value.detail
+    assert "brand_kits" in caplog.text
+    assert "PGRST205" in caplog.text
+    assert "sb_secret_unit_test" not in caplog.text
+
+
+def test_supabase_key_error_is_not_reported_as_generic_outage(monkeypatch):
+    import httpx
+    import pytest
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "SUPABASE_URL", "https://formastudio.supabase.co")
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit_test")
+
+    def unauthorized(*args, **kwargs):
+        return httpx.Response(401, json={"code": "PGRST301", "message": "Invalid API key"},
+                              request=httpx.Request("GET", "https://formastudio.supabase.co/rest/v1/brand_kits"))
+
+    monkeypatch.setattr(main_module.httpx, "request", unauthorized)
+    data_store = main_module.DataStore.__new__(main_module.DataStore)
+    with pytest.raises(HTTPException) as error:
+        data_store._request("GET", "brand_kits")
+    assert "server-side database key" in error.value.detail
+
+
+def test_workspace_database_error_page_explains_login_is_separate():
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    client = TestClient(app)
+    # Exercise the shared exception renderer through a temporary test-only route.
+    @main_module.app.get("/__test_workspace_error", include_in_schema=False)
+    def test_workspace_error(request: Request):
+        raise HTTPException(status_code=503, detail="Required workspace tables are missing from Supabase. Run schema.sql.")
+
+    try:
+        error = client.get("/__test_workspace_error")
+        assert error.status_code == 503
+        assert "workspace data connection issue, not a username or password error" in error.text
+        assert "Vercel function logs" in error.text
+    finally:
+        main_module.app.router.routes[:] = [route for route in main_module.app.router.routes if getattr(route, "path", None) != "/__test_workspace_error"]
+
+
+def test_client_supabase_query_is_scoped_to_its_own_workspace(monkeypatch):
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "SUPABASE_URL", "https://formastudio.supabase.co")
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit_test")
+    calls = []
+
+    def mock_request(method, url, **kwargs):
+        calls.append({"method": method, "url": url, **kwargs})
+        import httpx
+        return httpx.Response(200, json=[], request=httpx.Request(method, url))
+
+    monkeypatch.setattr(main_module.httpx, "request", mock_request)
+    data_store = main_module.DataStore.__new__(main_module.DataStore)
+    client_user = {"id": "c5105d08-bd79-5d64-b813-754d7bb9f95f", "role": "client"}
+    assert data_store.list_kits(client_user) == []
+    assert calls[0]["params"]["owner_id"] == "eq.c5105d08-bd79-5d64-b813-754d7bb9f95f"
