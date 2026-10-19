@@ -65,9 +65,8 @@ def test_supabase_rejects_wrong_project_url_shape():
         )
 
 
-def test_production_requires_supabase_server_configuration():
-    with pytest.raises(RuntimeError, match="required in production"):
-        validate_supabase_settings("", "", "", "production")
+def test_production_can_start_without_supabase_so_app_login_stays_independent():
+    assert validate_supabase_settings("", "", "", "production") == ("", "")
 
 
 def test_supabase_auth_accepts_modern_publishable_key():

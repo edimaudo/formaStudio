@@ -385,6 +385,8 @@ def test_supabase_missing_table_error_is_actionable(monkeypatch, caplog):
         data_store._request("GET", "brand_kits")
     assert error.value.status_code == 503
     assert "Run schema.sql" in error.value.detail
+    assert "No login accounts" in error.value.detail
+    assert "seed_accounts.py" not in error.value.detail
     assert "brand_kits" in caplog.text
     assert "PGRST205" in caplog.text
     assert "sb_secret_unit_test" not in caplog.text
@@ -446,3 +448,39 @@ def test_client_supabase_query_is_scoped_to_its_own_workspace(monkeypatch):
     client_user = {"id": "c5105d08-bd79-5d64-b813-754d7bb9f95f", "role": "client"}
     assert data_store.list_kits(client_user) == []
     assert calls[0]["params"]["owner_id"] == "eq.c5105d08-bd79-5d64-b813-754d7bb9f95f"
+
+
+def test_schema_grants_service_role_and_reloads_data_api_cache():
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    schema = (root / "schema.sql").read_text(encoding="utf-8").lower()
+    migration = (root / "migrations" / "20261019_grant_service_role_access.sql").read_text(encoding="utf-8").lower()
+    for sql in (schema, migration):
+        assert "grant usage on schema public to service_role" in sql
+        assert "public.brand_kits" in sql
+        assert "public.legal_entries" in sql and "public.legal_access_requests" in sql
+        assert "notify pgrst, 'reload schema'" in sql
+        assert "grant all privileges on table" in sql
+        assert "\n  to service_role;" in sql
+        assert "\n  to anon;" not in sql and "\n  to authenticated;" not in sql
+    assert "create table if not exists public.app_users" not in schema
+    assert "drop constraint if exists brand_kits_owner_id_fkey" in migration
+
+
+def test_dashboard_keeps_local_login_session_when_workspace_database_fails(monkeypatch):
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "APP_ENV", "development")
+    def unavailable(_user):
+        raise HTTPException(status_code=503, detail="Required workspace tables are missing from Supabase. Run schema.sql.")
+    monkeypatch.setattr(main_module.store, "list_kits", unavailable)
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/app")
+    assert response.status_code == 200
+    assert "You are signed in. Workspace data is unavailable." in response.text
+    assert "this warning only affects saved kits and persistent workspace data." in response.text
+    assert "create-kit-form" not in response.text
+

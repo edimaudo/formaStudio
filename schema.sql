@@ -1,22 +1,13 @@
--- Forma Studio schema for Supabase Postgres.
--- Run in Supabase SQL Editor before setting SUPABASE_URL and SUPABASE_SECRET_KEY.
--- SUPABASE_SERVICE_ROLE_KEY (legacy JWT) is also supported for existing deployments.
--- FastAPI uses the server Secret key for data access and Storage. App login is independently configured; no Supabase Auth user is needed.
+-- Forma Studio workspace-data schema for Supabase Postgres.
+-- This schema is for persistent brand kits, assets metadata, and Legal Kit records.
+-- App login is local and does not depend on these tables or Supabase Auth users.
+-- Run in Supabase SQL Editor to enable persistent workspace data.
 
 create extension if not exists pgcrypto;
 
-create table if not exists public.app_users (
-  id uuid primary key default gen_random_uuid(),
-  username text unique not null,
-  email text unique not null,
-  display_name text not null,
-  role text not null check (role in ('admin', 'client')),
-  created_at timestamptz not null default now()
-);
-
 create table if not exists public.brand_kits (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references public.app_users(id) on delete cascade,
+  owner_id uuid not null,
   name text not null,
   brand_name text not null,
   slug text unique not null,
@@ -38,7 +29,7 @@ create index if not exists brand_kits_status_idx on public.brand_kits (status);
 
 create table if not exists public.legal_entries (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references public.app_users(id) on delete cascade,
+  owner_id uuid not null,
   standard text not null check (standard in ('GDPR', 'SOC 2 Type II', 'ISO 27001')),
   status text not null default 'not_configured' check (status in ('not_configured', 'in_progress', 'documented', 'verified')),
   document_url text not null default '',
@@ -50,7 +41,7 @@ create table if not exists public.legal_entries (
 
 create table if not exists public.legal_access_requests (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references public.app_users(id) on delete cascade,
+  owner_id uuid not null,
   entry_id uuid not null references public.legal_entries(id) on delete cascade,
   standard text not null,
   email text not null,
@@ -64,13 +55,24 @@ create table if not exists public.legal_access_requests (
 );
 create index if not exists legal_access_requests_owner_status_idx on public.legal_access_requests (owner_id, status, created_at desc);
 
--- Lock down direct API access. The FastAPI server uses the private service-role key.
-alter table public.app_users enable row level security;
+-- Lock down direct API access. The FastAPI server uses its private server-only key.
 alter table public.brand_kits enable row level security;
 alter table public.legal_entries enable row level security;
 alter table public.legal_access_requests enable row level security;
 
--- Do not create anon/authenticated policies for these private application tables.
+-- Current Supabase projects may not automatically expose newly created public tables
+-- to the Data API. Grant access only to the server-side service_role; do not grant
+-- browser-facing anon/authenticated access to these private workspace tables.
+grant usage on schema public to service_role;
+grant all privileges on table
+  public.brand_kits,
+  public.legal_entries,
+  public.legal_access_requests
+  to service_role;
+
+-- Refresh PostgREST so newly created/granted tables become visible immediately.
+notify pgrst, 'reload schema';
+
 -- Configure backups, service-role rotation, storage policies, and a production email provider before launch.
 
 -- Private bucket for uploaded brand assets. The app proxies downloads through FastAPI

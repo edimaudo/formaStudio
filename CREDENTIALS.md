@@ -4,104 +4,75 @@ Keep secret values in a local `.env` file or your hosting provider's encrypted e
 
 ## 1. Application login accounts
 
-Forma Studio's visible username/password login is **app-managed**. The requested accounts and passwords are built into the application and work without any Vercel login environment variables. The app does not use Supabase Auth to validate these credentials and does not query Supabase Postgres as part of login or session-user resolution. The login form stays the only visible login UI; Supabase Auth sign-in placeholders remain commented out.
-
-| Variable | Purpose | Notes |
-| --- | --- | --- |
-| `ADMIN_USER_ID` | Administrator's workspace profile UUID | Defaults to the Forma Studio profile ID in `app/accounts.py`. Must match `public.app_users.id`. |
-| `ADMIN_EMAIL` | Profile/contact email for the administrator | Use a real address for hosted use and Legal Kit features. |
-| `ADMIN_DISPLAY_NAME` | Name shown in the workspace | Defaults to `Avery Chen`; replace as appropriate. |
-| `CLIENT_USER_ID` | Client's workspace profile UUID | Defaults to the Forma Studio profile ID in `app/accounts.py`. Must match `public.app_users.id`. |
-| `CLIENT_EMAIL` | Profile/contact email for the client | Use a real address for hosted use and Legal Kit features. |
-| `CLIENT_DISPLAY_NAME` | Name shown in the workspace | Defaults to `Jordan Lee`; replace as appropriate. |
-
-The fixed application credentials (same in local and hosted environments) are:
+Forma Studio's username/password login is handled locally by the application. It does not use Supabase Auth, query Supabase database tables, or require login credentials to be added to Vercel.
 
 | Role | Username | Application password |
 | --- | --- | --- |
 | Admin | `studioadmin` | `FormaAdmin!2026` |
 | Client | `client` | `FormaClient!2026` |
 
-These are the built-in application passwords in all environments; they do not need to be added to Vercel. They are not Supabase Auth passwords and are not stored in `app_users`. Because these shared credentials are fixed in source, anyone who knows them can sign in. Use this setup only for a controlled prototype; do not expose it publicly with sensitive workspace data.
+These fixed credentials are for controlled evaluation only. Anyone who knows them can sign in. Do not use them on a publicly exposed service holding sensitive client information. The app's signed session requires a unique `SESSION_SECRET`, which is separate from the usernames and passwords.
 
-Run `python scripts/seed_accounts.py` after configuring the Supabase database. The script creates or updates workspace profile rows and Legal Kit entries; it does **not** create Supabase Auth users and does not read, store, or modify application passwords. If it reports that an existing username has a different profile UUID, set `ADMIN_USER_ID` or `CLIENT_USER_ID` to the reported existing UUID in both local environment and hosting settings, then rerun. This prevents workspace records from being reassigned accidentally.
+## 2. Supabase workspace data (not login)
 
-## 2. Supabase Postgres and Storage
-
-Open the `formastudio` project in Supabase and copy the Project URL from **Connect** or **Settings → API Keys**. The display name is not the URL.
+Supabase is used for saved brand kits, uploaded assets, and Legal Kit records. Workspace owner IDs are stable application data identifiers, separate from the login flow. The `ADMIN_USER_ID` and `CLIENT_USER_ID` variables are optional compatibility settings for deployments whose existing saved records use custom owner UUIDs. They are not username/password settings. No `app_users` table, profile seeding, or Supabase Auth user is required for the two application logins.
 
 | Variable | What to enter | Where to find it |
 | --- | --- | --- |
-| `SUPABASE_URL` | Project root such as `https://<project-ref>.supabase.co` | Project **Connect** dialog or **Settings → API Keys** |
+| `ADMIN_USER_ID` / `CLIENT_USER_ID` | Optional stable UUIDs for existing workspace ownership; defaults are built into `app/accounts.py` | Keep existing hosting values when upgrading a deployment with saved kits; these are not credentials |
+| `ADMIN_EMAIL` / `CLIENT_EMAIL` | Optional contact addresses for email-restricted sharing / Legal Kit flows | Set in local `.env` or hosting settings |
+| `SUPABASE_URL` | Project root, e.g. `https://<project-ref>.supabase.co` | Supabase project Connect dialog or **Settings → API Keys** |
 | `SUPABASE_SECRET_KEY` | Server Secret key beginning `sb_secret_` | **Settings → API Keys → Secret keys** |
-| `SUPABASE_SERVICE_ROLE_KEY` | Legacy service-role JWT, generally `eyJ…` | Alternative only if using a legacy key; do not set alongside `SUPABASE_SECRET_KEY` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Legacy service-role JWT (generally `eyJ…`) | Use only if using the legacy key, and do not set it alongside `SUPABASE_SECRET_KEY` |
 
-Set `SUPABASE_URL` and exactly one server key for persistent workspace data. Do not append `/rest/v1`, `/storage/v1`, a table name, query string, or endpoint path to the Project URL. A Secret/service-role key is server-only and has elevated access; never place it in browser code.
+Set the Project URL and exactly one server-only key to enable persistent workspace data. Never put a server Secret/service-role key in browser code.
 
-Example:
+For a new database, run `schema.sql` in the Supabase SQL Editor. For a database created by an earlier version of Forma Studio, apply the core-messaging migration if required, then run `migrations/20261019_grant_service_role_access.sql` to grant server access and remove old foreign keys to the legacy `app_users` profile table. This migration does not delete workspace records. You do not need to run a seed script. If the existing deployment uses custom workspace owner UUIDs, preserve its `ADMIN_USER_ID` and `CLIENT_USER_ID` values; these affect record ownership only and never authenticate sign-in.
 
-```dotenv
-SUPABASE_URL=https://<your-actual-project-ref>.supabase.co
-SUPABASE_SECRET_KEY=sb_secret_<your-server-secret>
-SUPABASE_SERVICE_ROLE_KEY=
-```
-
-Replace placeholders with actual values; do not include angle brackets.
+If Supabase is absent or misconfigured, the local built-in login remains available. The dashboard will show that persistent workspace data is unavailable until the database configuration is corrected.
 
 ## 3. Optional Supabase Auth for email OTP only
 
-Supabase Auth is **not used for the admin/client login**. The key below is optional and only enables six-digit email verification for email-restricted brand kits and Legal Kit access requests. If it is absent, Forma Studio still starts and app users can still sign in; email OTP routes report that verification is unavailable.
+Supabase Auth is not used for the admin/client login. Its publishable key is optional and only enables six-digit email verification for email-restricted brand kits and Legal Kit access requests.
 
 | Variable | What to enter | Where to find it |
 | --- | --- | --- |
 | `SUPABASE_PUBLISHABLE_KEY` | Modern key beginning `sb_publishable_` | **Settings → API Keys → Publishable keys** |
 | `SUPABASE_ANON_KEY` | Legacy anon JWT with role claim `anon` | Alternative to publishable key, if using a legacy key |
 
-Set at most one of these optional values. Never put the server Secret key into either variable.
+Set at most one optional value. Never put the server Secret key into either variable. If enabling email OTP, configure **Authentication → Email Templates → Magic Link** to include `{{ .Token }}` and set up SMTP in Supabase Auth for production delivery.
 
-If enabling email OTP:
+The future Supabase Auth sign-in placeholder remains commented out, is not rendered in the UI, and is not called by the login route.
 
-1. Open **Authentication → Email Templates → Magic Link**.
-2. Ensure the template includes `{{ .Token }}` so it delivers a six-digit code.
-3. Verify email delivery and configure SMTP in Supabase Auth settings for production use.
-
-The commented-out Supabase Auth sign-in placeholder is not rendered and is not called by the application login route.
-
-## 4. Other variables
+## 4. Other environment variables
 
 | Variable | Purpose | Guidance |
 | --- | --- | --- |
-| `SESSION_SECRET` | Signs the app's HTTP-only session cookie | Use a random value of at least 32 characters. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
+| `SESSION_SECRET` | Signs the HTTP-only application session cookie | Use a random value of at least 32 characters. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
 | `APP_NAME` | Product name | Defaults to `Forma Studio`. |
 | `APP_ENV` | Runtime mode | Use `development` locally and `production` on the host. |
-| `GEMINI_API_KEY` | Brand copy, tagline, elevator-pitch generation | Server-side only; required for production. |
-| `GEMINI_MODEL` | Gemini model identifier | Defaults to `gemini-3.6-flash`; use a model supported by the key. |
+| `ADMIN_EMAIL` / `CLIENT_EMAIL` | Contact addresses for Legal Kit and restricted-share workflows | Optional; these do not control sign-in. Replace example addresses for real email workflows. |
+| `ADMIN_DISPLAY_NAME` / `CLIENT_DISPLAY_NAME` | Display names in the workspace | Optional. |
+| `GEMINI_API_KEY` | Brand copy, tagline, elevator pitch | Server-side only. |
+| `GEMINI_MODEL` | Gemini model | Defaults to `gemini-3.6-flash`. |
 | `QLOO_API_KEY` | Optional cultural insights | Server-side only. |
-| `QLOO_BASE_URL` | Qloo API root | Defaults to `https://hackathon.api.qloo.com`; do not append an endpoint path. |
+| `QLOO_BASE_URL` | Qloo API root | Defaults to `https://hackathon.api.qloo.com`. |
 
-## 5. Local environment example
-
-Copy `.env.example` to `.env`; replace placeholder service credentials and profile emails. The application login credentials are built in and are not set through `.env`.
+## 5. Environment file example
 
 ```dotenv
 APP_NAME=Forma Studio
 APP_ENV=development
 SESSION_SECRET=replace-with-a-unique-random-value-of-at-least-32-characters
-
-# Workspace profiles, not login credentials
-ADMIN_USER_ID=210ad331-4a00-55f4-af5b-28c4e441a799
 ADMIN_EMAIL=avery.chen@example.test
 ADMIN_DISPLAY_NAME=Avery Chen
-CLIENT_USER_ID=c5105d08-bd79-5d64-b813-754d7bb9f95f
 CLIENT_EMAIL=jordan.lee@example.test
 CLIENT_DISPLAY_NAME=Jordan Lee
-
 SUPABASE_URL=
 SUPABASE_SECRET_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_ANON_KEY=
-
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.6-flash
 QLOO_API_KEY=
@@ -110,13 +81,13 @@ QLOO_BASE_URL=https://hackathon.api.qloo.com
 
 ## Deployment checklist
 
-- [ ] Configure the actual `formastudio` Project URL and exactly one server key.
-- [ ] Run `schema.sql` in Supabase; for a new install, the legacy `20261018_supabase_auth.sql` is not required.
-- [ ] Set real profile email addresses and run `python scripts/seed_accounts.py` to provision the Postgres profile rows.
-- [ ] Confirm the built-in application accounts work. No username/password variables are required; do not expose the shared credentials publicly with sensitive data.
-- [ ] Set a fresh `SESSION_SECRET` in the host's secret settings.
-- [ ] Configure `GEMINI_API_KEY` and test tagline and elevator-pitch generation.
-- [ ] Only if email OTP is needed, configure one optional Auth key and verify the Supabase email template and SMTP.
+- [ ] Set a unique `SESSION_SECRET`.
+- [ ] For persistent workspace content, set the correct `formastudio` Project URL and exactly one server-only key. Preserve custom `ADMIN_USER_ID` / `CLIENT_USER_ID` values only if existing records use them.
+- [ ] Run `schema.sql` for a new database, or apply the required migrations for an existing database.
+- [ ] Confirm both built-in app accounts can sign in even if Supabase persistence is temporarily unavailable.
+- [ ] Configure `GEMINI_API_KEY` and test tagline/elevator-pitch generation.
+- [ ] Only if email OTP is needed, configure one optional Auth key and verify the email template and SMTP.
 - [ ] If using Qloo, verify its API key and endpoint.
-- [ ] Sign in as both roles, save a brand kit, and confirm the data persists across server restarts.
-- [ ] Rotate credentials that have been committed or exposed; changing `.env` does not revoke a leaked key.
+- [ ] Sign in as both roles, save a brand kit, and confirm data persists across restarts once Supabase is configured.
+
+Rotate credentials that have been committed or exposed; changing `.env` does not revoke a leaked key.

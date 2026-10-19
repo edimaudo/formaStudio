@@ -53,12 +53,21 @@ if APP_ENV == "production" and (
     raise RuntimeError("Set a unique, random SESSION_SECRET of at least 32 characters before running in production.")
 # Prefer the modern server-only Secret key. Validation deliberately fails fast on partial,
 # conflicting, publishable, malformed, or incorrectly named credentials.
-SUPABASE_URL, SUPABASE_API_KEY = validate_supabase_settings(
-    os.getenv("SUPABASE_URL", ""),
-    os.getenv("SUPABASE_SECRET_KEY", ""),
-    os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
-    APP_ENV,
-)
+SUPABASE_CONFIG_ERROR = ""
+try:
+    SUPABASE_URL, SUPABASE_API_KEY = validate_supabase_settings(
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_SECRET_KEY", ""),
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+        APP_ENV,
+    )
+except RuntimeError as exc:
+    # Workspace persistence is not login authentication. Preserve app startup and
+    # built-in sign-in even if a Supabase URL/key pair is incomplete or malformed.
+    # The dashboard reports the storage issue when persistence is actually needed.
+    SUPABASE_URL, SUPABASE_API_KEY = "", ""
+    SUPABASE_CONFIG_ERROR = str(exc)
+    logger.warning("Supabase workspace storage configuration is unavailable: %s", SUPABASE_CONFIG_ERROR)
 
 
 def supabase_headers(content_type: str = "application/json") -> dict[str, str]:
@@ -70,12 +79,19 @@ def supabase_headers(content_type: str = "application/json") -> dict[str, str]:
     return headers
 
 
-SUPABASE_AUTH_KEY = validate_supabase_auth_settings(
-    os.getenv("SUPABASE_URL", ""),
-    os.getenv("SUPABASE_PUBLISHABLE_KEY", ""),
-    os.getenv("SUPABASE_ANON_KEY", ""),
-    APP_ENV,
-)
+SUPABASE_AUTH_CONFIG_ERROR = ""
+try:
+    SUPABASE_AUTH_KEY = validate_supabase_auth_settings(
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_PUBLISHABLE_KEY", ""),
+        os.getenv("SUPABASE_ANON_KEY", ""),
+        APP_ENV,
+    )
+except RuntimeError as exc:
+    # This optional key only supports email verification, never app login.
+    SUPABASE_AUTH_KEY = ""
+    SUPABASE_AUTH_CONFIG_ERROR = str(exc)
+    logger.warning("Optional Supabase email verification configuration is unavailable: %s", SUPABASE_AUTH_CONFIG_ERROR)
 
 
 def supabase_auth_request(endpoint: str, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -212,7 +228,7 @@ class DataStore:
         self.legal_entries: list[dict[str, Any]] = []
         self.legal_requests: list[dict[str, Any]] = []
         self.login_attempts: dict[str, list[float]] = {}
-        if not self.supabase_enabled:
+        if not self.supabase_enabled and APP_ENV != "production":
             self._seed_starter_content()
 
     @property
@@ -225,7 +241,14 @@ class DataStore:
     def _request(self, method: str, table: str, *, params: dict[str, Any] | None = None,
                  payload: Any = None, prefer: str | None = None) -> Any:
         if not self.supabase_enabled:
-            raise RuntimeError("Supabase is not configured")
+            detail = (
+                "Workspace storage is not configured correctly. Check SUPABASE_URL and the "
+                "server-only SUPABASE_SECRET_KEY in hosting settings. Your login remains active."
+                if SUPABASE_CONFIG_ERROR
+                else "Workspace storage is not configured. Add SUPABASE_URL and a server-only "
+                     "SUPABASE_SECRET_KEY to enable persistent brand kits and assets. Your login remains active."
+            )
+            raise HTTPException(status_code=503, detail=detail)
         headers = self._headers()
         if prefer:
             headers["Prefer"] = prefer
@@ -264,7 +287,14 @@ class DataStore:
             elif status == 403:
                 detail = "Supabase denied access to the workspace tables. Confirm that schema.sql has been applied and that the server-only database key has access to the tables. A publishable key cannot replace the server-only key."
             elif status == 404 or error_code in {"PGRST205", "42P01"}:
-                detail = "Required workspace tables are missing from Supabase. Run schema.sql in the SQL Editor of your formastudio project, then run scripts/seed_accounts.py to create the workspace profiles."
+                detail = (
+                    f"Supabase's Data API cannot find the workspace table public.{table}. "
+                    "Run schema.sql in the SQL Editor of the same formastudio project configured in Vercel. "
+                    "If the table already exists in Table Editor, run migrations/20261019_grant_service_role_access.sql "
+                    "to grant the server-only data role access and refresh the API schema cache. "
+                    "No login accounts or Supabase Auth users need to be seeded. This is a workspace data "
+                    "configuration issue, not a Forma Studio username/password error."
+                )
             elif status == 400 or error_code in {"PGRST204", "42703"}:
                 detail = "The workspace database schema does not match this version of Forma Studio. Apply schema.sql and the core-messaging migration, then redeploy."
             elif status >= 500:
@@ -335,8 +365,7 @@ class DataStore:
         return next((u for u in self.users if u["username"].casefold() == wanted), None)
 
     def list_users(self) -> list[dict[str, Any]]:
-        if self.supabase_enabled:
-            return self._request("GET", "app_users", params={"select": "id,username,email,display_name,role", "order": "created_at.asc"}) or []
+        """Return local application identities; never query Supabase for login profiles."""
         return self.users
 
     def list_kits(self, user: dict[str, Any]) -> list[dict[str, Any]]:
@@ -668,11 +697,32 @@ def dashboard(request: Request) -> Any:
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login?next=/app", status_code=303)
-    kits = store.list_kits(user)
+    workspace_error = None
+    try:
+        if APP_ENV == "production" and not store.supabase_enabled:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Workspace storage settings are incomplete or invalid. Check SUPABASE_URL and the "
+                    "server-only SUPABASE_SECRET_KEY in hosting settings. Your login remains active."
+                    if SUPABASE_CONFIG_ERROR else
+                    "Workspace storage is not configured. Add SUPABASE_URL and a server-only "
+                    "SUPABASE_SECRET_KEY to enable persistent brand kits and assets. Your login remains active."
+                ),
+            )
+        kits = store.list_kits(user)
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        # Keep the user signed in and render the dashboard. Persistence may be
+        # unavailable, but that must not be represented as an authentication failure.
+        kits = []
+        workspace_error = str(exc.detail)
     return render(request, "dashboard.html", {"page_title": "Your studio", "kits": kits,
                   "users": store.list_users() if user["role"] == "admin" else [],
                   "is_admin": user["role"] == "admin", "kit_count": len(kits),
-                  "published_count": sum(1 for k in kits if k.get("status") == "published")})
+                  "published_count": sum(1 for k in kits if k.get("status") == "published"),
+                  "workspace_error": workspace_error})
 
 
 @app.post("/kits/new")

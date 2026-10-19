@@ -94,11 +94,10 @@ def validate_supabase_settings(
         )
 
     if not url and not selected_key:
-        if app_env == "production":
-            raise RuntimeError(
-                "Supabase is required in production. Set SUPABASE_URL and SUPABASE_SECRET_KEY "
-                "(recommended), or the legacy SUPABASE_SERVICE_ROLE_KEY."
-            )
+        # Supabase stores workspace content, but it is not the login provider.
+        # Allow the app and its built-in login to start when the data service is not
+        # configured; the dashboard will show a workspace-data warning and disable
+        # persistence-dependent actions rather than treating this as an auth failure.
         return "", ""
 
     url = validate_base_url("SUPABASE_URL", url, allow_local_http=True)
