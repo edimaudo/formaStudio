@@ -3,7 +3,7 @@ import re
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.main import BLOCK_TYPES, LEGAL_STANDARDS, DataStore, app, password_hash, slugify, verify_password, store
+from app.main import BLOCK_TYPES, IDENTITY_BLOCK_TYPES, LEGACY_BLOCK_TYPES, LEGAL_STANDARDS, STORED_BLOCK_TYPES, DataStore, app, password_hash, slugify, verify_password, store
 
 
 def test_upload_directory_is_not_created_during_module_import():
@@ -23,10 +23,14 @@ def test_password_hash_verifies_and_is_salted():
     assert not verify_password("wrong-password", first)
 
 
-def test_ten_brand_block_types_are_available():
-    assert len(BLOCK_TYPES) == 10
+def test_visible_brand_block_types_hide_legacy_3d_and_collateral_sections():
+    assert len(BLOCK_TYPES) == 8
     assert "Brand Story" in BLOCK_TYPES
-    assert "3D Models" in BLOCK_TYPES
+    assert "3D Models" not in BLOCK_TYPES
+    assert "Collaterals" not in BLOCK_TYPES
+    assert set(LEGACY_BLOCK_TYPES) == {"3D Models", "Collaterals"}
+    assert set(LEGACY_BLOCK_TYPES).issubset(STORED_BLOCK_TYPES)
+    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources"]
 
 
 def test_legal_kit_standards_are_explicit():
@@ -572,6 +576,72 @@ def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
     assert "data-font-preview" not in settings
 
 
+
+def test_editor_uses_sticky_project_sections_tabs_and_a_final_preview():
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    for target, label in [
+        ("#identity", "Brand identity"),
+        ("#brand-story", "Brand story"),
+        ("#culture", "Cultural lens"),
+        ("#share-settings", "Sharing &amp; access"),
+        ("#final-preview", "Final preview"),
+    ]:
+        assert f'href="{target}"' in html
+        assert label in html
+    assert 'id="final-preview"' in html
+    assert '<a class="text-link" href="/kits">← Back to Brand Kits</a>' in html
+    assert 'data-block-tabs' in html
+    assert 'data-block-section-tab="Colors"' in html
+    assert 'data-block-section-tab="Typography"' in html
+    assert 'data-block-section-tab="Logos"' in html
+    assert 'data-block-type="select"' not in html
+    assert 'data-add-block' not in html
+    assert "Find the words that stick" not in html
+    assert 'data-generation-context="tagline"' in html
+    assert 'data-generation-context="elevator_pitch"' in html
+    assert 'type="color"' in html
+    assert 'data-typography-field="heading_font"' in html
+    assert 'data-typography-field="body_font"' in html
+    assert 'data-logo-direction' in html
+    assert 'data-preview-palette' in html
+    assert 'data-preview-blocks' in html
+    # The old 3D Models/Collaterals content is preserved in a non-rendering JSON payload,
+    # but is not presented as a visible editor tab.
+    assert 'data-block-section-tab="3D Models"' not in html
+    assert 'data-block-section-tab="Collaterals"' not in html
+    assert '"3D Models"' in html and '"Collaterals"' in html
+
+
+def test_brand_story_does_not_require_an_asset_and_tabs_are_keyboard_enabled():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    editor = (root / "app/templates/kit_editor.html").read_text(encoding="utf-8")
+    js = (root / "app/static/js/app.js").read_text(encoding="utf-8")
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    story_section = editor.split('<section id="brand-story"', 1)[1].split('</section>', 1)[0]
+    assert 'data-block-file' not in story_section
+    assert 'data-block-url' not in story_section
+    assert 'data-block-section-tab' in editor
+    assert all(key in js for key in ("ArrowLeft", "ArrowRight", "Home", "End"))
+    assert '.editor-tabs { top: 0; z-index: 12;' in css
+    assert '.block-type-tabs { position: sticky;' in css
+    assert '.core-messaging-grid { grid-template-columns: 1fr; }' in css
+    assert '.sharing-layout { align-items: stretch; }' in css
+    assert '.sharing-controls, .share-preview-card { height: 100%; }' in css
+
+
+def test_legal_kit_has_only_one_active_primary_navigation_item():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    html = client.get("/legal").text
+    assert html.count('class="nav-item active"') == 1
+    assert '<a class="nav-item active" href="/legal" aria-current="page">' in html
+
+
 def test_legal_entries_are_linked_to_brand_kits_in_schema_and_migration():
     from pathlib import Path
     root = Path(__file__).parents[1]
@@ -612,9 +682,9 @@ def test_brand_kits_has_two_consistent_creation_pathways_and_no_repeated_create_
     assert 'action="/kits/guided"' in html
     assert html.count('action="/kits/new"') == 1
     assert html.count('action="/kits/guided"') == 1
-    assert "Start with my brief" in html
-    assert "Get guided brand direction" in html
-    assert "Gemini will turn it into a starting brand direction" in html
+    assert "Start from my brief" in html
+    assert "Build my starting direction" in html
+    assert "Gemini will shape it into a starting brand direction" in html
     assert 'data-guided-create' in html
     assert 'data-scroll-create' not in html
     assert 'class="app-topbar"' not in html

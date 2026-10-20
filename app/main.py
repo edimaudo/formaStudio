@@ -154,8 +154,19 @@ QLOO_BASE_URL = os.getenv("QLOO_BASE_URL", "https://hackathon.api.qloo.com").str
 # Qloo host can be changed only to one approved for the supplied API key.
 validate_base_url("QLOO_BASE_URL", QLOO_BASE_URL)
 BLOCK_TYPES = [
-    "Colors", "Typography", "Logos", "Visuals", "Videos", "Icons",
-    "3D Models", "Collaterals", "Resources", "Brand Story",
+    "Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources", "Brand Story",
+]
+IDENTITY_BLOCK_TYPES = ["Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources"]
+# Temporarily disabled in the product interface; existing stored assets remain preserved:
+# "3D Models",
+# "Collaterals",
+LEGACY_BLOCK_TYPES = ("3D Models", "Collaterals")
+STORED_BLOCK_TYPES = set(BLOCK_TYPES) | set(LEGACY_BLOCK_TYPES)
+DEFAULT_COLOR_PALETTE = [
+    {"name": "Primary", "hex": "#354F45"},
+    {"name": "Secondary", "hex": "#E6DED0"},
+    {"name": "Accent", "hex": "#C97856"},
+    {"name": "Ink", "hex": "#252A28"},
 ]
 LEGAL_STANDARDS = ["GDPR", "SOC 2 Type II", "ISO 27001"]
 
@@ -906,8 +917,70 @@ def edit_kit(request: Request, kit_id: str) -> Any:
         raise HTTPException(status_code=404, detail="Brand kit not found.")
     if not can_manage_kit(user, kit):
         raise HTTPException(status_code=403, detail="You do not have access to edit this brand kit.")
+    visible_blocks: list[dict[str, Any]] = []
+    hidden_legacy_blocks: list[dict[str, Any]] = []
+    source_blocks = [dict(block) for block in (kit.get("blocks") or [])]
+    for block in source_blocks:
+        if block.get("type") in LEGACY_BLOCK_TYPES:
+            hidden_legacy_blocks.append(block)
+        elif block.get("type") in BLOCK_TYPES:
+            visible_blocks.append(block)
+    defaults = {
+        "Colors": ("Color palette", "Choose color values and record where they should be used."),
+        "Typography": ("Type system", "Choose heading and body typefaces and define their hierarchy."),
+        "Logos": ("Logo direction", "Explore a form and visual character before producing final artwork."),
+        "Visuals": ("Visual direction", "Describe image style, materials, lighting, and composition."),
+        "Videos": ("Motion and video", "Describe motion principles and how video should feel."),
+        "Icons": ("Icon system", "Define shape, stroke, density, and where icons are useful."),
+        "Resources": ("Brand resources", "Collect working files, usage guidance, and references."),
+        "Brand Story": ("Brand story", "What should people understand, feel, and remember?"),
+    }
+    existing_types = {block.get("type") for block in visible_blocks}
+    for block_type, (title, content) in defaults.items():
+        if block_type not in existing_types:
+            visible_blocks.append({"id": str(uuid.uuid4()), "type": block_type, "title": title,
+                                   "content": content, "asset_url": "", "caption_url": ""})
+    # Prepare structured editor data without changing the saved row until the user presses Save.
+    for block in visible_blocks:
+        if block.get("type") == "Colors":
+            swatches = []
+            for source_swatch in (block.get("palette") or [])[:12]:
+                if not isinstance(source_swatch, dict):
+                    continue
+                hex_value = str(source_swatch.get("hex", "")).strip().upper()
+                if re.fullmatch(r"#[0-9A-F]{6}", hex_value):
+                    swatches.append({"hex": hex_value, "name": str(source_swatch.get("name", "Color"))[:60] or "Color"})
+            if not swatches:
+                for line in str(block.get("content", "")).splitlines():
+                    match = re.search(r"#[0-9a-fA-F]{6}(?![0-9a-fA-F])", line)
+                    if match:
+                        swatches.append({"hex": match.group(0).upper(), "name": line[:match.start()].strip(" ·:-") or "Color"})
+            block["palette"] = swatches[:12] or [dict(item) for item in DEFAULT_COLOR_PALETTE]
+        elif block.get("type") == "Typography":
+            typography = dict(block.get("typography") or {})
+            content_lines = str(block.get("content", "")).splitlines()
+            for line in content_lines:
+                lower = line.casefold()
+                if lower.startswith(("headlines:", "heading:", "display:")) and not typography.get("heading_font"):
+                    typography["heading_font"] = line.split(":", 1)[1].strip()
+                if lower.startswith(("body:", "body font:")) and not typography.get("body_font"):
+                    typography["body_font"] = line.split(":", 1)[1].strip()
+            block["typography"] = {"heading_font": str(typography.get("heading_font", "")),
+                                   "body_font": str(typography.get("body_font", "")),
+                                   "accent_font": str(typography.get("accent_font", ""))}
+        elif block.get("type") == "Logos":
+            block["logo_direction"] = str(block.get("logo_direction") or "explore")
+            block["logo_brief"] = str(block.get("logo_brief") or "")
+        elif block.get("type") == "Visuals":
+            block["visual_style"] = dict(block.get("visual_style") or {})
+        elif block.get("type") == "Videos":
+            block["motion_style"] = dict(block.get("motion_style") or {})
+        elif block.get("type") == "Icons":
+            block["icon_style"] = dict(block.get("icon_style") or {})
     return render(request, "kit_editor.html", {"page_title": kit.get("name", "Brand kit"), "kit": kit,
-                  "block_types": BLOCK_TYPES, "share_url": str(request.base_url).rstrip("/") + f"/b/{kit['slug']}"})
+                  "block_types": BLOCK_TYPES, "identity_block_types": IDENTITY_BLOCK_TYPES,
+                  "editor_blocks": visible_blocks, "hidden_legacy_blocks": hidden_legacy_blocks,
+                  "share_url": str(request.base_url).rstrip("/") + f"/b/{kit['slug']}"})
 
 
 class KitUpdate(BaseModel):
@@ -937,7 +1010,7 @@ async def save_kit(request: Request, kit_id: str, payload: KitUpdate) -> JSONRes
         raise HTTPException(status_code=422, detail="Choose a valid sharing option.")
     clean_blocks = []
     for block in payload.blocks:
-        if block.get("type") not in BLOCK_TYPES:
+        if block.get("type") not in STORED_BLOCK_TYPES:
             continue
         asset_url = str(block.get("asset_url", "")).strip()[:1500]
         caption_url = str(block.get("caption_url", "")).strip()[:1500] if block.get("type") == "Videos" else ""
@@ -945,14 +1018,52 @@ async def save_kit(request: Request, kit_id: str, payload: KitUpdate) -> JSONRes
             raise HTTPException(status_code=422, detail="Asset links must use HTTPS or a file uploaded to this brand kit.")
         if caption_url and not (caption_url.startswith("https://") or re.fullmatch(rf"/assets/{re.escape(kit_id)}/[A-Za-z0-9._-]+", caption_url)):
             raise HTTPException(status_code=422, detail="Caption links must use HTTPS or a WebVTT file uploaded to this brand kit.")
-        clean_blocks.append({
+        clean_block = {
             "id": str(block.get("id") or uuid.uuid4()),
             "type": block["type"],
             "title": str(block.get("title", block["type"]))[:140],
             "content": str(block.get("content", ""))[:8000],
             "asset_url": asset_url,
             "caption_url": caption_url,
-        })
+        }
+        if block.get("type") == "Colors":
+            palette = []
+            for swatch in (block.get("palette") or [])[:12]:
+                if not isinstance(swatch, dict):
+                    continue
+                name = str(swatch.get("name", "Color")).strip()[:60] or "Color"
+                hex_value = str(swatch.get("hex", "")).strip().upper()
+                if re.fullmatch(r"#[0-9A-F]{6}", hex_value):
+                    palette.append({"name": name, "hex": hex_value})
+            clean_block["palette"] = palette
+        elif block.get("type") == "Typography":
+            typography = block.get("typography") if isinstance(block.get("typography"), dict) else {}
+            clean_block["typography"] = {key: str(typography.get(key, "")).strip()[:120]
+                                          for key in ("heading_font", "body_font", "accent_font")}
+        elif block.get("type") == "Logos":
+            logo_direction = str(block.get("logo_direction", "explore"))
+            clean_block["logo_direction"] = logo_direction if logo_direction in {"wordmark", "monogram", "emblem", "combination", "explore"} else "explore"
+            clean_block["logo_brief"] = str(block.get("logo_brief", "")).strip()[:900]
+        elif block.get("type") == "Visuals":
+            values = block.get("visual_style") if isinstance(block.get("visual_style"), dict) else {}
+            clean_block["visual_style"] = {
+                "photography": str(values.get("photography", "")).strip()[:80],
+                "lighting": str(values.get("lighting", "")).strip()[:80],
+                "texture": str(values.get("texture", "")).strip()[:80],
+            }
+        elif block.get("type") == "Videos":
+            values = block.get("motion_style") if isinstance(block.get("motion_style"), dict) else {}
+            clean_block["motion_style"] = {
+                "pace": str(values.get("pace", "")).strip()[:80],
+                "editing": str(values.get("editing", "")).strip()[:80],
+            }
+        elif block.get("type") == "Icons":
+            values = block.get("icon_style") if isinstance(block.get("icon_style"), dict) else {}
+            clean_block["icon_style"] = {
+                "form": str(values.get("form", "")).strip()[:80],
+                "density": str(values.get("density", "")).strip()[:80],
+            }
+        clean_blocks.append(clean_block)
     if payload.access_mode == "password" and not payload.access_password and not kit.get("access_password_hash"):
         raise HTTPException(status_code=422, detail="Add a password before enabling password-protected sharing.")
     emails = sorted({e.strip().lower() for e in payload.allowed_emails_text.splitlines() if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", e.strip())})
@@ -1115,13 +1226,22 @@ def shared_kit(request: Request, slug: str, verify: str = "", email: str = "", m
     unlocked = allowed_to_view_kit(request, kit)
     rendered_kit = {**kit, "blocks": []}
     for source_block in kit.get("blocks", []):
+        if source_block.get("type") in LEGACY_BLOCK_TYPES:
+            continue
         block = dict(source_block)
         if block.get("type") == "Colors":
             swatches = []
-            for line in str(block.get("content", "")).splitlines():
-                match = re.search(r"#[0-9a-fA-F]{6}(?![0-9a-fA-F])", line)
-                if match:
-                    swatches.append({"hex": match.group(0).upper(), "name": line[:match.start()].strip(" ·:-") or "Color"})
+            for source_swatch in (block.get("palette") or [])[:12]:
+                if not isinstance(source_swatch, dict):
+                    continue
+                hex_value = str(source_swatch.get("hex", "")).strip().upper()
+                if re.fullmatch(r"#[0-9A-F]{6}", hex_value):
+                    swatches.append({"hex": hex_value, "name": str(source_swatch.get("name", "Color"))[:60] or "Color"})
+            if not swatches:
+                for line in str(block.get("content", "")).splitlines():
+                    match = re.search(r"#[0-9a-fA-F]{6}(?![0-9a-fA-F])", line)
+                    if match:
+                        swatches.append({"hex": match.group(0).upper(), "name": line[:match.start()].strip(" ·:-") or "Color"})
             block["color_swatches"] = swatches[:12]
         rendered_kit["blocks"].append(block)
     return render(request, "shared_kit.html", {"page_title": kit.get("brand_name", kit["name"]), "kit": rendered_kit,

@@ -136,6 +136,28 @@
     if (empty) empty.hidden = !query || visible > 0;
   });
 
+  document.querySelectorAll('[data-pathway-switcher]').forEach(switcher => {
+    const tabs = [...switcher.querySelectorAll('[data-pathway-tab]')];
+    const panels = [...switcher.querySelectorAll('[data-pathway-panel]')];
+    function activatePathway(name, focus = false) {
+      tabs.forEach(tab => {
+        const active = tab.dataset.pathwayTab === name;
+        tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach(panel => { panel.hidden = panel.dataset.pathwayPanel !== name; });
+      if (focus) tabs.find(tab => tab.dataset.pathwayTab === name)?.focus();
+    }
+    activatePathway(switcher.dataset.defaultPath || 'brief');
+    tabs.forEach(tab => tab.addEventListener('click', () => activatePathway(tab.dataset.pathwayTab)));
+    switcher.querySelector('[data-pathway-tabs]')?.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      activatePathway(tabs[next].dataset.pathwayTab, true);
+    });
+  });
+
   document.querySelectorAll('[data-toggle-password]').forEach(button => button.addEventListener('click', () => {
     const input = document.getElementById(button.dataset.togglePassword);
     if (!input) return;
@@ -188,14 +210,38 @@
     let saved = false;
 
     function blockData() {
-      return [...blockList.querySelectorAll('[data-block]')].map(block => ({
-        id: block.dataset.blockId,
-        type: block.dataset.blockType,
-        title: block.querySelector('[data-block-title]')?.value || block.dataset.blockType,
-        content: block.querySelector('[data-block-content]')?.value || '',
-        asset_url: block.querySelector('[data-block-url]')?.value.trim() || '',
-        caption_url: block.querySelector('[data-block-caption-url]')?.value.trim() || ''
-      }));
+      const visibleBlocks = [...editor.querySelectorAll('[data-block]')].map(block => {
+        const data = {
+          id: block.dataset.blockId,
+          type: block.dataset.blockType,
+          title: block.querySelector('[data-block-title]')?.value || block.querySelector('.block-card-heading h3')?.textContent?.trim() || block.dataset.blockType,
+          content: block.querySelector('[data-block-content]')?.value || '',
+          asset_url: block.querySelector('[data-block-url]')?.value.trim() || '',
+          caption_url: block.querySelector('[data-block-caption-url]')?.value.trim() || ''
+        };
+        if (data.type === 'Colors') {
+          data.palette = [...block.querySelectorAll('[data-color-row]')].map(row => ({
+            name: row.querySelector('[data-color-name]')?.value.trim() || 'Color',
+            hex: row.querySelector('[data-color-hex]')?.value.trim().toUpperCase() || ''
+          })).filter(color => /^#[0-9A-F]{6}$/.test(color.hex));
+        } else if (data.type === 'Typography') {
+          data.typography = Object.fromEntries(['heading_font', 'body_font', 'accent_font'].map(key => [key, block.querySelector(`[data-typography-field="${key}"]`)?.value.trim() || '']));
+        } else if (data.type === 'Logos') {
+          data.logo_direction = block.querySelector('[data-logo-direction]')?.value || 'explore';
+          data.logo_brief = block.querySelector('[data-logo-brief]')?.value.trim() || '';
+        } else if (data.type === 'Visuals') {
+          data.visual_style = Object.fromEntries(['photography', 'lighting', 'texture'].map(key => [key, block.querySelector(`[data-visual-field="${key}"]`)?.value.trim() || '']));
+        } else if (data.type === 'Videos') {
+          data.motion_style = Object.fromEntries(['pace', 'editing'].map(key => [key, block.querySelector(`[data-motion-field="${key}"]`)?.value.trim() || '']));
+        } else if (data.type === 'Icons') {
+          data.icon_style = Object.fromEntries(['form', 'density'].map(key => [key, block.querySelector(`[data-icon-field="${key}"]`)?.value.trim() || '']));
+        }
+        return data;
+      });
+      let legacy = [];
+      try { legacy = JSON.parse(editor.querySelector('[data-legacy-blocks]')?.textContent || '[]'); } catch { legacy = []; }
+      const visibleIds = new Set(visibleBlocks.map(block => `${block.type}:${block.id}`));
+      return [...visibleBlocks, ...legacy.filter(block => !visibleIds.has(`${block.type}:${block.id}`))];
     }
     function kitData() {
       return {
@@ -243,6 +289,7 @@
         editor.querySelectorAll('[data-publish-state]').forEach(node => { node.textContent = 'Live'; node.classList.remove('status-draft'); node.classList.add('status-live'); });
         editor.querySelectorAll('[data-share-status]').forEach(node => { node.textContent = 'Published'; node.classList.remove('status-draft'); node.classList.add('status-live'); });
         if (feedback) feedback.textContent = 'Your brand kit is live. The share URL is ready.';
+        const previewOpen = editor.querySelector('[data-preview-open]'); if (previewOpen) { previewOpen.hidden = false; previewOpen.href = result.share_url; }
         const copied = await Promise.resolve();
       } catch (error) { if (feedback) feedback.textContent = error.message; }
       finally { setButtonLoading(button, false, '', prior); }
@@ -256,55 +303,110 @@
       if (emails) emails.hidden = mode !== 'email';
     });
 
-    editor.querySelector('[data-add-block]')?.addEventListener('click', () => {
-      const type = editor.querySelector('[data-block-type]').value;
-      const blockId = `block-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
-      const card = document.createElement('article'); card.className = 'editable-block'; card.dataset.block = ''; card.dataset.blockId = blockId; card.dataset.blockType = type;
-      const heading = document.createElement('div'); heading.className = 'block-card-heading';
-      const typeLabel = document.createElement('div'); typeLabel.className = 'block-type-label';
-      const count = document.createElement('span'); count.className = 'block-number'; count.textContent = String(blockList.children.length + 1).padStart(2, '0');
-      const typeText = document.createElement('span'); typeText.textContent = type; typeLabel.append(count, typeText);
-      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'remove-block-button'; remove.dataset.removeBlock = ''; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${type} block`);
-      heading.append(typeLabel, remove); card.append(heading);
-      card.append(makeLabelInput('Block title', 'input', 'data-block-title', defaultBlockTitle(type)));
-      card.append(makeLabelInput('Content and usage notes', 'textarea', 'data-block-content', defaultBlockContent(type)));
-      const assetLabel = makeLabelInput('Asset or reference URL (optional)', 'input', 'data-block-url', '');
-      assetLabel.querySelector('input').type = 'text'; assetLabel.querySelector('input').placeholder = 'https://... or uploaded file'; assetLabel.querySelector('input').maxLength = 1500; card.append(assetLabel);
-      if (type === 'Videos') {
-        const captionLabel = makeLabelInput('Captions file URL (WebVTT, optional)', 'input', 'data-block-caption-url', '');
-        captionLabel.querySelector('input').type = 'text'; captionLabel.querySelector('input').placeholder = 'Upload a .vtt file below'; captionLabel.querySelector('input').maxLength = 1500; card.append(captionLabel);
-      }
-      const uploadDetails = document.createElement('details'); uploadDetails.className = 'asset-upload';
-      const uploadSummary = document.createElement('summary'); uploadSummary.textContent = 'Upload a file'; uploadDetails.append(uploadSummary);
-      const uploadControls = document.createElement('div'); uploadControls.className = 'asset-upload-controls';
-      const uploadLabel = document.createElement('label'); uploadLabel.append(document.createTextNode('Choose a file (15 MB max)'));
-      const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.dataset.blockFile = ''; fileInput.accept = '.png,.jpg,.jpeg,.webp,.gif,.pdf,.mp4,.webm,.glb,.gltf,.woff,.woff2,.ttf,.otf,.svg,.zip,.docx,.pptx'; uploadLabel.append(fileInput);
-      const uploadButton = document.createElement('button'); uploadButton.type = 'button'; uploadButton.className = 'button button-secondary button-small'; uploadButton.dataset.uploadAsset = ''; uploadButton.textContent = 'Upload file';
-      const uploadFeedback = document.createElement('p'); uploadFeedback.dataset.uploadFeedback = ''; uploadFeedback.setAttribute('role', 'status'); uploadFeedback.setAttribute('aria-live', 'polite');
-      uploadControls.append(uploadLabel, uploadButton, uploadFeedback);
-      if (type === 'Videos') {
-        const captionLabel = document.createElement('label'); captionLabel.append(document.createTextNode('Choose WebVTT captions (.vtt)'));
-        const captionInput = document.createElement('input'); captionInput.type = 'file'; captionInput.dataset.captionFile = ''; captionInput.accept = '.vtt,text/vtt'; captionLabel.append(captionInput);
-        const captionButton = document.createElement('button'); captionButton.type = 'button'; captionButton.className = 'button button-secondary button-small'; captionButton.dataset.uploadCaptions = ''; captionButton.textContent = 'Upload captions';
-        const captionFeedback = document.createElement('p'); captionFeedback.dataset.captionFeedback = ''; captionFeedback.setAttribute('role', 'status'); captionFeedback.setAttribute('aria-live', 'polite');
-        uploadControls.append(captionLabel, captionButton, captionFeedback);
-      }
-      uploadDetails.append(uploadControls); card.append(uploadDetails);
-      const foot = document.createElement('div'); foot.className = 'block-card-foot';
-      const note = document.createElement('span'); note.textContent = 'Changes are saved to this kit, not to external files.';
-      const orders = document.createElement('div'); orders.className = 'block-order-actions';
-      for (const [direction, symbol, label] of [['up', '↑', 'Move block up'], ['down', '↓', 'Move block down']]) { const button = document.createElement('button'); button.type = 'button'; button.dataset.moveBlock = direction; button.textContent = symbol; button.setAttribute('aria-label', label); orders.append(button); }
-      foot.append(note, orders); card.append(foot); blockList.append(card); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.querySelector('[data-block-title]')?.focus({ preventScroll: true });
-    });
-    function defaultBlockTitle(type) { return ({ Colors: 'Core palette', Typography: 'Type system', Logos: 'Logo suite', Visuals: 'Visual direction', Videos: 'Motion and video', Icons: 'Icon system', '3D Models': 'Spatial assets', Collaterals: 'Brand applications', Resources: 'Guides and resources', 'Brand Story': 'Brand story' })[type] || type; }
-    function defaultBlockContent(type) { return ({ Colors: 'Add hex values and notes on where each color should be used.', Typography: 'Add typefaces, weights, hierarchy, and usage guidance.', Logos: 'Describe approved variations and clear-space rules.', Visuals: 'Describe photography, illustration, art direction, and image usage.', Videos: 'Add motion principles, examples, and video links.', Icons: 'Add icon style, stroke, scale, and usage guidance.', '3D Models': 'Add 3D assets and notes for rendering or handoff.', Collaterals: 'Add packaging, stationery, campaign, or social applications.', Resources: 'Add source files, guidelines, templates, and reference material.', 'Brand Story': 'Tell the story behind the brand in clear, distinctive language.' })[type] || ''; }
-    function makeLabelInput(labelText, tagName, dataAttribute, value) {
-      const label = document.createElement('label'); label.append(document.createTextNode(labelText));
-      const element = document.createElement(tagName); element.setAttribute(dataAttribute, ''); element.value = value;
-      if (tagName === 'textarea') element.rows = 3;
-      else element.maxLength = dataAttribute === 'data-block-url' ? 1500 : 140;
-      label.append(element); return label;
+    const componentTabs = [...editor.querySelectorAll('[data-block-section-tab]')];
+    const componentPanels = [...editor.querySelectorAll('[data-block-panel]')];
+    function activateComponentTab(tab, focus = false) {
+      const selected = tab.dataset.blockSectionTab;
+      componentTabs.forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      componentPanels.forEach(panel => { panel.hidden = panel.dataset.blockPanel !== selected; });
+      if (focus) tab.focus();
     }
+    const initiallySelectedComponent = componentTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || componentTabs[0];
+    if (initiallySelectedComponent) activateComponentTab(initiallySelectedComponent);
+    componentTabs.forEach(tab => tab.addEventListener('click', () => activateComponentTab(tab)));
+    editor.querySelector('[data-block-tabs]')?.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = componentTabs.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? componentTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + componentTabs.length) % componentTabs.length;
+      activateComponentTab(componentTabs[next], true);
+    });
+
+    function updateColorPicker(row, source) {
+      const picker = row?.querySelector('[data-color-picker]');
+      const hex = row?.querySelector('[data-color-hex]');
+      if (!picker || !hex) return;
+      if (source === picker) hex.value = picker.value.toUpperCase();
+      else if (/^#[0-9a-fA-F]{6}$/.test(hex.value.trim())) picker.value = hex.value.trim();
+    }
+    editor.addEventListener('input', event => {
+      if (event.target.matches('[data-color-picker], [data-color-hex]')) updateColorPicker(event.target.closest('[data-color-row]'), event.target);
+      renderFinalPreview();
+    });
+    editor.addEventListener('click', event => {
+      const addColor = event.target.closest('[data-add-color]');
+      if (addColor) {
+        const palette = addColor.closest('[data-block]')?.querySelector('[data-color-palette]');
+        const first = palette?.querySelector('[data-color-row]');
+        if (!palette || !first) return;
+        const row = first.cloneNode(true);
+        row.querySelector('[data-color-picker]').value = '#64748B';
+        row.querySelector('[data-color-name]').value = 'New color';
+        row.querySelector('[data-color-hex]').value = '#64748B';
+        palette.append(row); row.querySelector('[data-color-name]').focus({ preventScroll: true }); renderFinalPreview();
+      }
+      const removeColor = event.target.closest('[data-remove-color]');
+      if (removeColor) {
+        const palette = removeColor.closest('[data-color-palette]');
+        const rows = palette?.querySelectorAll('[data-color-row]') || [];
+        if (rows.length <= 1) { const feedback = editor.querySelector('[data-save-feedback]'); if (feedback) feedback.textContent = 'Keep at least one color in the palette.'; return; }
+        removeColor.closest('[data-color-row]')?.remove(); renderFinalPreview();
+      }
+    });
+
+    function renderFinalPreview() {
+      const preview = editor.querySelector('[data-kit-live-preview]');
+      if (!preview) return;
+      const value = selector => editor.querySelector(selector)?.value?.trim() || '';
+      const setText = (selector, text) => { const node = preview.querySelector(selector); if (node) { node.textContent = text; node.hidden = !text; } };
+      setText('[data-preview-brand]', value('[data-field="brand_name"]') || value('[data-field="name"]') || 'Your brand');
+      setText('[data-preview-description]', value('[data-field="description"]'));
+      setText('[data-preview-tagline]', value('[data-field="tagline"]'));
+      setText('[data-preview-pitch]', value('[data-field="elevator_pitch"]'));
+      const palette = preview.querySelector('[data-preview-palette]');
+      if (palette) {
+        palette.replaceChildren();
+        const colorBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Colors');
+        const rows = [...(colorBlock?.querySelectorAll('[data-color-row]') || [])];
+        rows.forEach(row => {
+          const hex = row.querySelector('[data-color-hex]')?.value.trim() || '#FFFFFF';
+          const name = row.querySelector('[data-color-name]')?.value.trim() || 'Color';
+          if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+          const item = document.createElement('div'); const chip = document.createElement('span'); chip.style.backgroundColor = hex; chip.setAttribute('aria-hidden', 'true');
+          const label = document.createElement('strong'); label.textContent = name; const code = document.createElement('code'); code.textContent = hex.toUpperCase();
+          item.append(chip, label, code); palette.append(item);
+        });
+      }
+      const blocks = preview.querySelector('[data-preview-blocks]');
+      if (blocks) {
+        blocks.replaceChildren();
+        [...editor.querySelectorAll('[data-block]')].filter(block => !['3D Models', 'Collaterals'].includes(block.dataset.blockType)).forEach(block => {
+          const card = document.createElement('article'); const title = document.createElement('strong');
+          title.textContent = block.querySelector('[data-block-title]')?.value?.trim() || block.querySelector('.block-card-heading h3')?.textContent?.trim() || block.dataset.blockType;
+          const content = document.createElement('p');
+          if (block.dataset.blockType === 'Colors') content.textContent = block.querySelector('[data-block-content]')?.value || 'Color palette';
+          else if (block.dataset.blockType === 'Typography') {
+            const values = ['heading_font', 'body_font', 'accent_font'].map(key => block.querySelector(`[data-typography-field="${key}"]`)?.value.trim()).filter(Boolean);
+            content.textContent = values.length ? `Typefaces: ${values.join(' · ')}. ${block.querySelector('[data-block-content]')?.value || ''}` : (block.querySelector('[data-block-content]')?.value || 'Type system');
+          } else if (block.dataset.blockType === 'Logos') content.textContent = block.querySelector('[data-block-content]')?.value || block.querySelector('[data-logo-brief]')?.value || 'Logo direction to refine';
+          else {
+            const styleBits = ['photography', 'lighting', 'texture'].map(key => block.querySelector(`[data-visual-field="${key}"]`)?.value.trim()).filter(Boolean);
+            const motionBits = ['pace', 'editing'].map(key => block.querySelector(`[data-motion-field="${key}"]`)?.value.trim()).filter(Boolean);
+            const iconBits = ['form', 'density'].map(key => block.querySelector(`[data-icon-field="${key}"]`)?.value.trim()).filter(Boolean);
+            const details = styleBits.length ? `Visual style: ${styleBits.join(' · ')}. ` : motionBits.length ? `Motion: ${motionBits.join(' · ')}. ` : iconBits.length ? `Icon system: ${iconBits.join(' · ')}. ` : '';
+            content.textContent = details + (block.querySelector('[data-block-content]')?.value || '');
+          }
+          card.append(title, content); blocks.append(card);
+        });
+      }
+    }
+    renderFinalPreview();
+
     blockList?.addEventListener('click', async event => {
       const upload = event.target.closest('[data-upload-asset], [data-upload-captions]');
       if (upload) {
@@ -333,14 +435,6 @@
         finally { upload.disabled = false; upload.removeAttribute('aria-busy'); upload.textContent = previousText; }
         return;
       }
-      const remove = event.target.closest('[data-remove-block]');
-      if (remove) { remove.closest('[data-block]')?.remove(); [...blockList.querySelectorAll('[data-block]')].forEach((node, index) => { const n = node.querySelector('.block-number'); if (n) n.textContent = String(index + 1).padStart(2, '0'); }); return; }
-      const move = event.target.closest('[data-move-block]');
-      if (!move) return;
-      const current = move.closest('[data-block]');
-      if (move.dataset.moveBlock === 'up' && current.previousElementSibling) blockList.insertBefore(current, current.previousElementSibling);
-      if (move.dataset.moveBlock === 'down' && current.nextElementSibling) blockList.insertBefore(current.nextElementSibling, current);
-      [...blockList.querySelectorAll('[data-block]')].forEach((node, index) => { const n = node.querySelector('.block-number'); if (n) n.textContent = String(index + 1).padStart(2, '0'); });
     });
 
     editor.querySelector('[data-copy-share]')?.addEventListener('click', async event => {
@@ -360,7 +454,14 @@
       const task = button.dataset.task;
       const field = editor.querySelector(`[data-field="${target}"]`);
       const status = editor.querySelector(`[data-generation-status="${target}"]`);
+      const contextField = editor.querySelector(`[data-generation-context="${target}"]`);
+      const generationContext = contextField?.value.trim() || '';
       if (!field) return;
+      if (generationContext.length < 12) {
+        if (status) status.textContent = 'Add a little more context before generating.';
+        contextField?.focus();
+        return;
+      }
       const prior = button.textContent;
       setButtonLoading(button, true, 'Writing…', prior);
       if (status) status.textContent = 'Building a draft from your brief…';
@@ -375,9 +476,10 @@
           audience: editor.querySelector('[data-field="audience"]').value,
           positioning: editor.querySelector('#copy-positioning')?.value.trim() || description,
           tone: editor.querySelector('#copy-tone')?.value.trim() || 'Clear, distinctive, human',
-          key_points: [description, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : ''].filter(Boolean).join('\n')
+          key_points: [generationContext, description, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : ''].filter(Boolean).join('\n').slice(0, 1500)
         }});
         field.value = result.copy;
+        renderFinalPreview();
         if (status) status.textContent = 'Draft added. Review it, then save the kit.';
         if (feedback) feedback.textContent = `${task} drafted. Save changes to keep it.`;
       } catch (error) {
@@ -385,6 +487,28 @@
       } finally {
         setButtonLoading(button, false, '', prior);
       }
+    }));
+
+    editor.querySelectorAll('[data-generate-logo]').forEach(button => button.addEventListener('click', async () => {
+      const block = button.closest('[data-block]');
+      const briefField = block?.querySelector('[data-logo-brief]');
+      const status = block?.querySelector('[data-logo-status]');
+      const brief = briefField?.value.trim() || '';
+      if (brief.length < 12) { if (status) status.textContent = 'Describe the look and feel first.'; briefField?.focus(); return; }
+      const prior = button.textContent; setButtonLoading(button, true, 'Developing direction…', prior);
+      if (status) status.textContent = 'Considering structure, personality, and practical use…';
+      try {
+        const result = await api('/api/ai/copy', { method: 'POST', body: {
+          task: 'Logo direction', brand_name: editor.querySelector('[data-field="brand_name"]').value,
+          industry: editor.querySelector('[data-field="industry"]').value, audience: editor.querySelector('[data-field="audience"]').value,
+          positioning: editor.querySelector('[data-field="description"]').value,
+          tone: block.querySelector('[data-logo-direction]').value,
+          key_points: brief.slice(0, 900)
+        }});
+        block.querySelector('[data-block-content]').value = result.copy; renderFinalPreview();
+        if (status) status.textContent = 'Direction generated. Edit it before saving.';
+      } catch (error) { if (status) status.textContent = error.message; }
+      finally { setButtonLoading(button, false, '', prior); }
     }));
 
     const copyButton = editor.querySelector('[data-generate-copy]');
@@ -408,10 +532,11 @@
     editor.querySelector('[data-copy-to-story]')?.addEventListener('click', async () => {
       const copy = editor.querySelector('[data-copy-result]').value.trim();
       if (!copy) return;
-      let story = [...blockList.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
-      if (!story) { editor.querySelector('[data-block-type]').value = 'Brand Story'; editor.querySelector('[data-add-block]').click(); story = [...blockList.querySelectorAll('[data-block]')].at(-1); }
+      const story = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
+      if (!story) return;
       story.querySelector('[data-block-content]').value = copy;
-      if (feedback) feedback.textContent = 'Copy added to the Brand Story block. Save to keep it.';
+      renderFinalPreview();
+      if (feedback) feedback.textContent = 'Story draft applied. Save changes to keep it.';
       story.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     editor.querySelector('[data-copy-copy]')?.addEventListener('click', async event => {
