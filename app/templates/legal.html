@@ -16,70 +16,59 @@
   <main id="main-content" tabindex="-1" class="app-main">
     <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
     <div class="page-content legal-page" data-legal-page>
-      <section class="page-intro"><div><h1>Legal Kit</h1><p>Review the materials associated with a brand and track the evidence still needed.</p></div>{% if selected_kit and not legal_data_error %}<a class="button button-secondary" href="/legal/share/{{ current_user.username }}?brand_kit_id={{ selected_kit.id }}" target="_blank" rel="noopener">Preview evidence portal <span aria-hidden="true">↗</span></a>{% endif %}</section>
+      <section class="page-intro">
+        <div><h1>Legal Kit</h1><p>Assess a brand's content against selected frameworks and track the review decision.</p></div>
+        {% if selected_kit and not legal_portal_error %}<a class="button button-secondary" href="/legal/share/{{ current_user.username }}?brand_kit_id={{ selected_kit.id }}" target="_blank" rel="noopener">Preview access portal <span aria-hidden="true">↗</span></a>{% endif %}
+      </section>
       {% if legal_data_error %}
-        <div class="alert alert-error workspace-data-alert" role="status"><strong>Compliance records are temporarily unavailable.</strong><p>Your sign-in is active. Try again later or contact the workspace administrator.</p></div>
+        <div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>Your sign-in is active. The brand-content review needs workspace storage to be available.</p></div>
       {% elif not brand_kits %}
-        <div class="empty-state legal-no-brand"><h2>No brand to review yet</h2><p>Create a brand kit first. Legal Kit will review materials associated with that brand.</p><a class="button button-primary" href="/kits">Create brand kit</a></div>
+        <div class="empty-state legal-no-brand"><h2>No brand to review yet</h2><p>Create a brand kit first. Legal Kit will assess the content associated with that brand.</p><a class="button button-primary" href="/kits">Create brand kit</a></div>
       {% else %}
-        <form class="legal-brand-selector" method="get" action="/legal">
-          <div><label for="legal-brand-select">Brand under review</label><select id="legal-brand-select" name="brand_kit_id">{% for kit in brand_kits %}<option value="{{ kit.id }}" {{ 'selected' if selected_kit and kit.id|string == selected_kit.id|string else '' }}>{{ kit.brand_name or kit.name }}</option>{% endfor %}</select></div>
-          <button type="submit" class="button button-secondary">Review brand</button>
-          {% if selected_kit %}<a class="text-link" href="/kits/{{ selected_kit.id }}">Edit brand <span aria-hidden="true">→</span></a>{% endif %}
+        <form class="legal-brand-selector" method="get" action="/legal" data-legal-brand-selector>
+          <div><label for="legal-brand-select">Selected brand</label><select id="legal-brand-select" name="brand_kit_id" data-legal-brand-select>{% for kit in brand_kits %}<option value="{{ kit.id }}" {{ 'selected' if selected_kit and kit.id|string == selected_kit.id|string else '' }}>{{ kit.brand_name or kit.name }}</option>{% endfor %}</select></div>
+          {% if selected_kit %}<a class="button button-secondary" href="/kits/{{ selected_kit.id }}">Edit brand</a>{% endif %}
         </form>
+        {% if legal_portal_error %}<p class="legal-portal-note" role="status">The access portal is temporarily unavailable. Brand-content analysis can still run.</p>{% endif %}
         {% if selected_kit %}
           <section class="legal-analysis-panel" aria-labelledby="legal-analysis-heading">
-            <div class="legal-analysis-heading"><div><h2 id="legal-analysis-heading">Review selected brand</h2><p>Choose the frameworks to include. The analysis checks the brand-kit material you have supplied and identifies evidence gaps; it does not determine legal compliance.</p></div><span class="compliance-completion">{{ compliance_completed }} of {{ compliance_total }} have evidence recorded</span></div>
+            <div class="legal-analysis-heading"><div><h2 id="legal-analysis-heading">Brand content assessment</h2><p>Check the selected brand's written content and visual materials against the frameworks you choose.</p></div></div>
             <fieldset class="legal-framework-selection">
-              <legend>Include frameworks in this review</legend>
-              <div class="legal-framework-options">
-                {% set descriptions = {'GDPR':'Privacy and personal-data handling', 'ISO 27001':'Information security management', 'SOC 2 Type II':'Security controls and operating evidence'} %}
+              <legend>Assess against</legend>
+              <div class="legal-framework-options legal-framework-options-inline">
+                {% set descriptions = {'GDPR':'Privacy, consent and personal data', 'ISO 27001':'Information security management', 'SOC 2 Type II':'Security controls and operating claims'} %}
                 {% for standard in legal_display_standards %}
-                  <label class="legal-framework-option"><input type="checkbox" data-analysis-standard value="{{ standard }}" checked><span><strong>{{ standard }}</strong><small>{{ descriptions[standard] }}</small></span></label>
+                  <label class="legal-framework-option"><input type="checkbox" data-analysis-standard value="{{ standard }}" {{ 'checked' if standard in legal_selected_standards else '' }}><span><strong>{{ standard }}</strong><small>{{ descriptions[standard] }}</small></span></label>
                 {% endfor %}
               </div>
             </fieldset>
-            <div class="legal-analysis-actions"><button type="button" class="button button-primary" data-analyze-compliance data-brand-kit-id="{{ selected_kit.id }}">Analyze selected brand</button><p data-analysis-status role="status" aria-live="polite"></p></div>
+            <div class="legal-analysis-actions"><button type="button" class="button button-primary" data-analyze-compliance data-brand-kit-id="{{ selected_kit.id }}">Analyze brand content</button><p data-analysis-status role="status" aria-live="polite"></p></div>
           </section>
-          <section class="legal-analysis-results" data-compliance-analysis hidden tabindex="-1" aria-labelledby="legal-analysis-results-heading">
-            <div class="legal-analysis-results-heading"><h2 id="legal-analysis-results-heading">Review findings</h2><button class="button button-secondary button-small" type="button" data-clear-analysis>Clear results</button></div>
-            <p class="legal-analysis-summary" data-analysis-summary></p>
+          <script type="application/json" data-saved-legal-report>{{ legal_review_report|tojson }}</script>
+          <section class="legal-analysis-results" data-compliance-analysis {% if not legal_review_has_report %}hidden{% endif %} tabindex="-1" aria-labelledby="legal-analysis-results-heading">
+            <div class="legal-analysis-results-heading"><div><h2 id="legal-analysis-results-heading">Alignment report</h2><p class="legal-report-brand-name">{{ selected_kit.brand_name or selected_kit.name }}</p></div><span class="status-pill" data-review-status-pill>{{ legal_review_status_labels.get(legal_review_status, 'Not reviewed') }}</span></div>
+            <p class="legal-analysis-summary" data-analysis-summary>{{ legal_review_analysis.get('summary', '') if legal_review_analysis else '' }}</p>
             <div data-analysis-findings class="legal-analysis-findings"></div>
+            <p class="legal-report-persistence-note" data-report-persistence-status role="status" aria-live="polite"></p>
           </section>
-          <section class="legal-evidence-section" aria-labelledby="evidence-workflow-heading">
-            <div class="legal-evidence-heading"><div><h2 id="evidence-workflow-heading">Evidence workflow</h2><p>Move each framework from collection to internal review as supporting material is added.</p></div><span class="legal-internal-note">“Reviewed” means reviewed by your team, not independently certified.</span></div>
-            <div class="legal-evidence-list">
-              {% set workflow_keys = ['not_configured', 'in_progress', 'documented', 'verified'] %}
-              {% set workflow_labels = ['Not started', 'Collecting evidence', 'Ready for review', 'Reviewed'] %}
-              {% set standard_notes = {'GDPR':'Privacy notices, lawful basis, retention and data-subject processes.', 'ISO 27001':'Security scope, risk assessment, controls and audit records.', 'SOC 2 Type II':'Control design, operating evidence and auditor documentation.'} %}
-              {% for entry in entries|sort(attribute='standard') %}
-              <article class="legal-evidence-row" data-legal-entry data-entry-id="{{ entry.id }}" data-brand-kit-id="{{ selected_kit.id }}">
-                <div class="legal-evidence-row-heading"><div><h3>{{ entry.standard }}</h3><p>{{ standard_notes[entry.standard] }}</p></div><span class="status-pill {{ 'status-live' if entry.status in ['documented','verified'] else 'status-draft' }}" data-legal-status-label>{{ {'not_configured':'Not started','in_progress':'Collecting evidence','documented':'Ready for review','verified':'Reviewed'}[entry.status] if entry.status in workflow_keys else 'Not started' }}</span></div>
-                {% set current_step = workflow_keys.index(entry.status) if entry.status in workflow_keys else 0 %}
-                <fieldset class="evidence-flow-picker" data-evidence-flow>
-                  <legend>Evidence stage</legend>
-                  <div class="evidence-flow-steps">
-                    {% for key in workflow_keys %}
-                    <label class="evidence-flow-step {{ 'is-complete' if loop.index0 < current_step else '' }} {{ 'is-current' if loop.index0 == current_step else '' }}">
-                      <input type="radio" name="legal-status-{{ entry.id }}" data-legal-status value="{{ key }}" aria-label="{{ entry.standard }}: {{ workflow_labels[loop.index0] }}" {{ 'checked' if key == entry.status else '' }}>
-                      <span class="evidence-flow-dot" aria-hidden="true"></span><span class="evidence-flow-label">{{ workflow_labels[loop.index0] }}</span>
-                    </label>
-                    {% endfor %}
-                  </div>
-                </fieldset>
-                <details class="legal-evidence-details"><summary>Evidence details and sharing</summary>
-                  <div class="legal-evidence-form">
-                    <div><label for="legal-url-{{ entry.id }}">Evidence link</label><input id="legal-url-{{ entry.id }}" data-legal-url type="url" placeholder="https://..." value="{{ entry.document_url }}"></div>
-                    <div><label for="legal-access-{{ entry.id }}">Evidence visibility</label><select id="legal-access-{{ entry.id }}" data-legal-access><option value="public" {{ 'selected' if entry.access_mode == 'public' else '' }}>Public</option><option value="request" {{ 'selected' if entry.access_mode == 'request' else '' }}>Restricted · request access</option></select></div>
-                    <div class="legal-evidence-notes"><label for="legal-notes-{{ entry.id }}">Review notes and next actions</label><textarea id="legal-notes-{{ entry.id }}" data-legal-notes rows="2" maxlength="1000" placeholder="Owner, review date, what is missing, or the next action.">{{ entry.notes }}</textarea></div>
-                    <div class="legal-evidence-save"><button type="button" class="button button-secondary" data-save-legal>Save evidence record</button><p class="inline-feedback" data-legal-feedback role="status" aria-live="polite"></p></div>
-                  </div>
-                </details>
-              </article>
+          <section class="legal-report-review" data-report-workflow {% if not legal_review_has_report %}hidden{% endif %} aria-labelledby="legal-review-stage-heading">
+            <div class="legal-report-review-heading"><h2 id="legal-review-stage-heading">Review stage</h2><p>Record each decision and when it changed.</p></div>
+            <form class="legal-review-form" data-report-review-form>
+              <div><label for="legal-review-status">Stage</label><select id="legal-review-status" name="status" data-review-status>
+                {% for key, label in legal_review_status_labels.items() %}{% if key != 'not_analyzed' %}<option value="{{ key }}" {{ 'selected' if key == legal_review_status else '' }}>{{ label }}</option>{% endif %}{% endfor %}
+              </select></div>
+              <div class="legal-review-note-field"><label for="legal-review-note">Change note</label><input id="legal-review-note" name="note" maxlength="1000" placeholder="What changed or what needs attention?"></div>
+              <div class="legal-review-submit"><button type="submit" class="button button-secondary" data-save-review-stage>Save review update</button><p data-review-update-feedback role="status" aria-live="polite"></p></div>
+            </form>
+            <section class="legal-review-history-section" aria-labelledby="legal-review-history-heading"><h3 id="legal-review-history-heading">Change history</h3><ol class="legal-review-history" data-review-history>
+              {% for event in legal_review_history|reverse %}
+              <li><div class="legal-history-topline"><strong>{{ legal_review_status_labels.get(event.status, event.status|replace('_', ' ')|title) }}</strong><time datetime="{{ event.changed_at }}">{{ event.changed_at[:16].replace('T', ' ') }} UTC</time></div>{% if event.changed_by %}<p>Changed by {{ event.changed_by }}</p>{% endif %}{% if event.note %}<p>{{ event.note }}</p>{% endif %}</li>
               {% endfor %}
-            </div>
+            </ol><p class="legal-history-empty" data-review-history-empty {% if legal_review_history %}hidden{% endif %}>No review changes have been recorded yet.</p></section>
           </section>
-          {% if is_admin %}<section class="legal-requests-section"><div class="section-title-row"><div><h2>Access requests</h2></div></div>{% set pending_requests = access_requests|selectattr('status', 'equalto', 'pending')|list %}{% if pending_requests %}<div class="access-request-list">{% for item in pending_requests %}<article class="access-request-card" data-access-request data-request-id="{{ item.id }}"><div class="access-request-main"><span class="request-standard">{{ item.standard }}</span><h3>{{ item.requester_name or item.email }}</h3><p>{{ item.email }}</p>{% if item.reason %}<blockquote>{{ item.reason }}</blockquote>{% endif %}<small>Requested {{ item.created_at[:10] if item.created_at else 'recently' }}</small></div><div class="access-request-actions"><button type="button" class="button button-secondary" data-review-request="denied">Deny</button><button type="button" class="button button-primary" data-review-request="approved">Approve</button><p class="inline-feedback" data-request-feedback role="status" aria-live="polite"></p></div></article>{% endfor %}</div>{% else %}<div class="empty-request-state"><strong>No access requests need review.</strong></div>{% endif %}</section>{% endif %}
+          {% if is_admin and not legal_portal_error %}
+          <section class="legal-requests-section"><div class="section-title-row"><div><h2>Access requests</h2></div></div>{% set pending_requests = access_requests|selectattr('status', 'equalto', 'pending')|list %}{% if pending_requests %}<div class="access-request-list">{% for item in pending_requests %}<article class="access-request-card" data-access-request data-request-id="{{ item.id }}"><div class="access-request-main"><span class="request-standard">{{ item.standard }}</span><h3>{{ item.requester_name or item.email }}</h3><p>{{ item.email }}</p>{% if item.reason %}<blockquote>{{ item.reason }}</blockquote>{% endif %}<small>Requested {{ item.created_at[:10] if item.created_at else 'recently' }}</small></div><div class="access-request-actions"><button type="button" class="button button-secondary" data-review-request="denied">Deny</button><button type="button" class="button button-primary" data-review-request="approved">Approve</button><p class="inline-feedback" data-request-feedback role="status" aria-live="polite"></p></div></article>{% endfor %}</div>{% else %}<div class="empty-request-state"><strong>No access requests need review.</strong></div>{% endif %}</section>
+          {% endif %}
         {% endif %}
       {% endif %}
     </div>

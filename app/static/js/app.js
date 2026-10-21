@@ -616,12 +616,29 @@
 
   const legalPage = document.querySelector('[data-legal-page]');
   if (legalPage) {
+    const brandSelect = legalPage.querySelector('[data-legal-brand-select]');
+    brandSelect?.addEventListener('change', () => brandSelect.form?.requestSubmit());
+
     const analyzeButton = legalPage.querySelector('[data-analyze-compliance]');
     const resultPanel = legalPage.querySelector('[data-compliance-analysis]');
     const resultSummary = legalPage.querySelector('[data-analysis-summary]');
     const resultFindings = legalPage.querySelector('[data-analysis-findings]');
     const analysisStatus = legalPage.querySelector('[data-analysis-status]');
+    const persistenceNote = legalPage.querySelector('[data-report-persistence-status]');
+    const reviewWorkflow = legalPage.querySelector('[data-report-workflow]');
+    const reviewStatus = legalPage.querySelector('[data-review-status]');
+    const reviewStatusPill = legalPage.querySelector('[data-review-status-pill]');
+    const reviewHistory = legalPage.querySelector('[data-review-history]');
+    const reviewHistoryEmpty = legalPage.querySelector('[data-review-history-empty]');
+    const reviewFeedback = legalPage.querySelector('[data-review-update-feedback]');
+    const reviewForm = legalPage.querySelector('[data-report-review-form]');
+    const reviewSaveButton = legalPage.querySelector('[data-save-review-stage]');
+    const reviewNote = legalPage.querySelector('#legal-review-note');
     const selectedKitId = analyzeButton?.dataset.brandKitId || '';
+    const reviewStageLabels = {
+      not_analyzed: 'Not analyzed', analysis_ready: 'Report ready',
+      in_review: 'In review', changes_needed: 'Changes needed', reviewed: 'Reviewed'
+    };
 
     function addAnalysisList(parent, label, items) {
       if (!Array.isArray(items) || !items.length) return;
@@ -633,7 +650,7 @@
     }
     function renderLegalAnalysis(analysis) {
       resultFindings.replaceChildren();
-      resultSummary.textContent = String(analysis?.summary || 'Review the material-specific observations and next steps below.');
+      resultSummary.textContent = String(analysis?.summary || 'Review the brand-specific alignment observations and recommendations below.');
       if (analysis?.analysis_text) {
         const text = document.createElement('p'); text.className = 'analysis-fallback-text'; text.style.whiteSpace = 'pre-wrap'; text.textContent = analysis.analysis_text; resultFindings.append(text); return;
       }
@@ -642,22 +659,65 @@
         const article = document.createElement('article'); article.className = 'analysis-finding-row';
         const head = document.createElement('div'); head.className = 'analysis-finding-row-heading';
         const title = document.createElement('h3'); title.textContent = String(item.standard || 'Framework');
-        const assessment = document.createElement('span'); assessment.className = 'status-pill'; assessment.textContent = String(item.materials_assessment || 'Needs review');
+        const assessment = document.createElement('span'); assessment.className = 'status-pill'; assessment.textContent = String(item.alignment_assessment || item.materials_assessment || 'Not assessable from supplied content');
         head.append(title, assessment); article.append(head);
-        addAnalysisList(article, 'Material identified', item.evidence_identified);
-        addAnalysisList(article, 'Gaps to check', item.gaps_to_check);
-        addAnalysisList(article, 'Suggested next actions', item.next_actions);
+        addAnalysisList(article, 'Content that aligns', item.aligned_content || item.evidence_identified);
+        addAnalysisList(article, 'Alignment gaps', item.alignment_gaps || item.gaps_to_check);
+        addAnalysisList(article, 'Recommended changes', item.recommended_changes || item.next_actions);
         resultFindings.append(article);
       });
       if (!standards.length) {
-        const empty = document.createElement('p'); empty.textContent = 'No structured findings were returned. Try the analysis again.'; resultFindings.append(empty);
+        const empty = document.createElement('p'); empty.textContent = 'No structured findings were returned. Run the analysis again.'; resultFindings.append(empty);
       }
     }
+    function renderReviewHistory(history) {
+      if (!reviewHistory) return;
+      reviewHistory.replaceChildren();
+      (Array.isArray(history) ? [...history].reverse() : []).forEach(event => {
+        const item = document.createElement('li');
+        const top = document.createElement('div'); top.className = 'legal-history-topline';
+        const label = document.createElement('strong'); label.textContent = reviewStageLabels[event.status] || String(event.status || 'Updated');
+        const time = document.createElement('time'); time.dateTime = String(event.changed_at || '');
+        const date = new Date(event.changed_at || ''); time.textContent = Number.isNaN(date.getTime()) ? String(event.changed_at || '') : `${date.toLocaleString()} `;
+        top.append(label, time); item.append(top);
+        if (event.changed_by) { const who = document.createElement('p'); who.textContent = `Changed by ${event.changed_by}`; item.append(who); }
+        if (event.note) { const note = document.createElement('p'); note.textContent = String(event.note); item.append(note); }
+        reviewHistory.append(item);
+      });
+      if (reviewHistoryEmpty) reviewHistoryEmpty.hidden = reviewHistory.children.length > 0;
+    }
+    function setReviewStatus(status) {
+      if (reviewStatus && reviewStageLabels[status]) reviewStatus.value = status;
+      if (reviewStatusPill) reviewStatusPill.textContent = reviewStageLabels[status] || 'Not reviewed';
+    }
+    function setReportPersistence(persisted, message = '') {
+      if (persistenceNote) persistenceNote.textContent = message;
+      if (reviewSaveButton) reviewSaveButton.disabled = !persisted;
+      if (reviewStatus) reviewStatus.disabled = !persisted;
+      if (reviewNote) reviewNote.disabled = !persisted;
+    }
+
+    // Restore the saved report on page load so it remains a durable brand-level report.
+    const savedReportNode = legalPage.querySelector('[data-saved-legal-report]');
+    if (savedReportNode) {
+      try {
+        const savedReport = JSON.parse(savedReportNode.textContent || '{}');
+        if (savedReport?.analysis) {
+          renderLegalAnalysis(savedReport.analysis);
+          resultPanel.hidden = false;
+          if (reviewWorkflow) reviewWorkflow.hidden = false;
+          setReportPersistence(true, 'Saved with this brand.');
+        }
+      } catch (_) {
+        // Invalid saved JSON should not prevent the rest of Legal Kit from working.
+      }
+    }
+
     analyzeButton?.addEventListener('click', async () => {
       const selectedStandards = [...legalPage.querySelectorAll('[data-analysis-standard]:checked')].map(input => input.value);
       if (!selectedStandards.length) { analysisStatus.textContent = 'Select at least one framework to analyze.'; return; }
       const prior = analyzeButton.textContent;
-      analysisStatus.textContent = 'Reviewing the selected brand material…';
+      analysisStatus.textContent = 'Reviewing the selected brand content…';
       resultPanel.hidden = false;
       resultSummary.textContent = '';
       resultFindings.replaceChildren();
@@ -665,52 +725,38 @@
       try {
         const response = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: selectedKitId, standards: selectedStandards } });
         renderLegalAnalysis(response.analysis || {});
-        analysisStatus.textContent = 'Analysis complete. Review the findings before acting on them.';
+        analysisStatus.textContent = 'Analysis complete.';
         resultPanel.focus?.({ preventScroll: true });
+        if (reviewWorkflow) reviewWorkflow.hidden = false;
+        setReviewStatus(response.review_status || 'analysis_ready');
+        renderReviewHistory(response.review_history || []);
+        setReportPersistence(Boolean(response.persisted), response.persistence_message || 'Report generated.');
       } catch (error) {
-        resultSummary.textContent = error.message;
+        resultSummary.textContent = 'The analysis could not be completed. Check the Gemini configuration and try again.';
         analysisStatus.textContent = 'The analysis could not be completed.';
       } finally { setButtonLoading(analyzeButton, false, '', prior); }
     });
-    legalPage.querySelector('[data-clear-analysis]')?.addEventListener('click', () => {
-      resultPanel.hidden = true; resultSummary.textContent = ''; resultFindings.replaceChildren(); analysisStatus.textContent = '';
-      analyzeButton?.focus();
+
+    reviewForm?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const prior = reviewSaveButton?.textContent || 'Save review update';
+      if (reviewFeedback) reviewFeedback.textContent = '';
+      if (reviewSaveButton) setButtonLoading(reviewSaveButton, true, 'Saving…', prior);
+      try {
+        const response = await api('/api/legal/review', { method: 'PUT', body: {
+          brand_kit_id: selectedKitId,
+          status: reviewStatus?.value || 'analysis_ready',
+          note: reviewNote?.value.trim() || ''
+        }});
+        setReviewStatus(response.status);
+        renderReviewHistory(response.history || []);
+        if (reviewFeedback) reviewFeedback.textContent = 'Review update saved.';
+        if (reviewNote) reviewNote.value = '';
+        setReportPersistence(true, 'Review history saved with this brand.');
+      } catch (_) {
+        if (reviewFeedback) reviewFeedback.textContent = 'The update could not be saved. Check workspace storage and apply the brand review report migration.';
+      } finally { if (reviewSaveButton) setButtonLoading(reviewSaveButton, false, '', prior); }
     });
   }
 
-  const evidenceStageLabels = { not_configured: 'Not started', in_progress: 'Collecting evidence', documented: 'Ready for review', verified: 'Reviewed' };
-  document.querySelectorAll('[data-legal-entry]').forEach(card => {
-    const stepFlow = card.querySelector('[data-evidence-flow]');
-    function updateEvidenceFlow(status) {
-      const stages = ['not_configured', 'in_progress', 'documented', 'verified'];
-      const current = Math.max(0, stages.indexOf(status));
-      stepFlow?.querySelectorAll('.evidence-flow-step').forEach((step, index) => {
-        step.classList.toggle('is-complete', index < current);
-        step.classList.toggle('is-current', index === current);
-      });
-    }
-    card.querySelectorAll('[data-legal-status]').forEach(input => input.addEventListener('change', () => updateEvidenceFlow(input.value)));
-    card.querySelector('[data-save-legal]')?.addEventListener('click', async event => {
-      const button = event.currentTarget; const feedback = card.querySelector('[data-legal-feedback]'); const prior = button.textContent;
-      const selectedStatus = card.querySelector('[data-legal-status]:checked')?.value || 'not_configured';
-      setButtonLoading(button, true, 'Saving…', prior);
-      try {
-        const result = await api(`/api/legal/${encodeURIComponent(card.dataset.entryId)}`, { method: 'PUT', body: {
-          status: selectedStatus,
-          document_url: card.querySelector('[data-legal-url]').value.trim(),
-          access_mode: card.querySelector('[data-legal-access]').value,
-          notes: card.querySelector('[data-legal-notes]').value
-        }});
-        if (feedback) feedback.textContent = 'Evidence record saved.';
-        const label = card.querySelector('[data-legal-status-label]');
-        if (label) {
-          const newLabel = evidenceStageLabels[result.entry.status] || 'Not started';
-          label.textContent = newLabel;
-          label.classList.toggle('status-live', ['documented', 'verified'].includes(result.entry.status));
-          label.classList.toggle('status-draft', !['documented', 'verified'].includes(result.entry.status));
-        }
-      } catch (error) { if (feedback) feedback.textContent = error.message; }
-      finally { setButtonLoading(button, false, '', prior); }
-    });
-  });
 })();

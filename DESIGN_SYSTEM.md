@@ -45,4 +45,4 @@ The brand editor includes persistent tagline and elevator-pitch fields alongside
 
 - **Overview** is a summary of brands already created and their publication state. It does not include brand-creation forms.
 - **Brand Kits** is the distinct management page for finding, creating, and editing kits.
-- **Legal Kit** selects a brand and tracks its GDPR, SOC 2 Type II, and ISO 27001 evidence/status for that brand, rather than presenting a detached list of owner-level standards.
+- **Legal Kit** selects a brand, assesses its content against chosen frameworks, and stores one report-level review stage with timestamps and reviewer notes. Frameworks are shown as findings inside the report, not as separate workflow cards.

@@ -21,6 +21,10 @@ create table if not exists public.brand_kits (
   access_password_hash text,
   allowed_emails jsonb not null default '[]'::jsonb,
   blocks jsonb not null default '[]'::jsonb,
+  legal_review_report jsonb not null default '{}'::jsonb,
+  legal_review_status text not null default 'not_analyzed' check (legal_review_status in ('not_analyzed', 'analysis_ready', 'in_review', 'changes_needed', 'reviewed')),
+  legal_review_updated_at timestamptz,
+  legal_review_history jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

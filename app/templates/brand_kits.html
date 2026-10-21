@@ -17,8 +17,8 @@
       <section class="page-intro"><div><h1>Brand Kits</h1></div></section>
       {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>You can stay in the workspace, but changes cannot be saved until storage is available.</p></div>{% endif %}
       <div class="kit-page-tabs" role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs data-default-kit-view="{{ 'create' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'existing' }}">
-        <button type="button" role="tab" id="kit-page-tab-existing" aria-controls="kit-page-panel-existing" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'true' }}" data-kit-page-tab="existing" class="{{ '' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'active' }}">Existing</button>
-        <button type="button" role="tab" id="kit-page-tab-create" aria-controls="kit-page-panel-create" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'false' }}" data-kit-page-tab="create" class="{{ 'active' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else '' }}">Create a brand kit</button>
+        <button type="button" role="tab" id="kit-page-tab-existing" aria-controls="kit-page-panel-existing" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'true' }}" data-kit-page-tab="existing" class="{{ '' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'active' }}">Existing Brand Kits</button>
+        <button type="button" role="tab" id="kit-page-tab-create" aria-controls="kit-page-panel-create" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'false' }}" data-kit-page-tab="create" class="{{ 'active' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else '' }}">Create a Brand Kit</button>
       </div>
       <section id="kit-page-panel-existing" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-existing" data-kit-page-panel="existing" {% if guided_error or guided_form.get('idea') or (not kits and not workspace_error) %}hidden{% endif %}>
       {% if kits %}
@@ -31,11 +31,10 @@
       </section>
       <section id="kit-page-panel-create" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-create" data-kit-page-panel="create" {% if not (guided_error or guided_form.get('idea') or (not kits and not workspace_error)) %}hidden{% endif %}>
       <section id="create-kit" class="creation-pathways" aria-labelledby="create-heading" data-pathway-switcher data-default-path="{{ 'guided' if guided_error or guided_form.get('idea') else 'brief' }}">
-        <div class="pathways-heading"><h2 id="create-heading">Create a brand kit</h2></div>
         {% if guided_error %}<div class="alert alert-error guided-create-alert" role="status">{{ guided_error }}</div>{% endif %}
         <div class="creation-tabs" role="tablist" aria-label="Choose how to create a brand kit" data-pathway-tabs>
           <button type="button" role="tab" id="pathway-tab-brief" aria-controls="pathway-panel-brief" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') else 'true' }}" data-pathway-tab="brief" class="{{ '' if guided_error or guided_form.get('idea') else 'active' }}">I know what I want</button>
-          <button type="button" role="tab" id="pathway-tab-guided" aria-controls="pathway-panel-guided" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') else 'false' }}" data-pathway-tab="guided" class="{{ 'active' if guided_error or guided_form.get('idea') else '' }}">Help me find the direction</button>
+          <button type="button" role="tab" id="pathway-tab-guided" aria-controls="pathway-panel-guided" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') else 'false' }}" data-pathway-tab="guided" class="{{ 'active' if guided_error or guided_form.get('idea') else '' }}">Guided Brand Design</button>
         </div>
         <section class="pathway-panel" id="pathway-panel-brief" role="tabpanel" aria-labelledby="pathway-tab-brief" data-pathway-panel="brief" {% if guided_error or guided_form.get('idea') %}hidden{% endif %}>
           <article class="pathway-card pathway-brief"><p>Start from the direction you already have. You can refine the identity, copy, and assets in the editor.</p>

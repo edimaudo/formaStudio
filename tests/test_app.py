@@ -495,25 +495,26 @@ def test_dashboard_keeps_local_login_session_when_workspace_database_fails(monke
 
 
 
-def test_legal_page_hides_raw_supabase_schema_diagnostics(monkeypatch):
+def test_legal_page_hides_raw_supabase_schema_diagnostics_and_keeps_analysis_available(monkeypatch):
     from fastapi import HTTPException
     from app import main as main_module
 
-    def missing_legal_table(_user, brand_kit_id=None):
+    def missing_legal_table(_kit):
         raise HTTPException(
             status_code=503,
             detail=("Supabase's Data API cannot find the workspace table public.legal_entries. "
                     "Run schema.sql in the SQL Editor of the same formastudio project configured in Vercel."),
         )
 
-    monkeypatch.setattr(main_module.store, "list_legal", missing_legal_table)
+    monkeypatch.setattr(main_module.store, "ensure_legal_entries_for_kit", missing_legal_table)
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/legal")
 
     assert response.status_code == 200
-    assert "Compliance records are temporarily unavailable." in response.text
-    assert "Your sign-in is active." in response.text
+    assert "The access portal is temporarily unavailable." in response.text
+    assert "Brand-content analysis can still run." in response.text
+    assert 'data-analyze-compliance' in response.text
     assert "Supabase's Data API" not in response.text
     assert "public.legal_entries" not in response.text
     assert "Run schema.sql" not in response.text
@@ -541,7 +542,7 @@ def test_overview_and_brand_kits_are_separate_work_areas():
     brand_kits = client.get("/kits")
     assert brand_kits.status_code == 200
     assert "Northline Outdoors" in brand_kits.text
-    assert "Create a brand kit" in brand_kits.text
+    assert "Create a Brand Kit" in brand_kits.text
     assert 'action="/kits/new"' in brand_kits.text
     assert 'href="/app#brand-kits"' not in brand_kits.text
 
@@ -552,9 +553,10 @@ def test_legal_checklist_is_scoped_to_a_selected_brand():
     response = client.get("/legal?brand_kit_id=starter-kit-002")
     assert response.status_code == 200
     assert "Northline Outdoors" in response.text
-    assert "Brand under review" in response.text
-    assert "Privacy notices, lawful basis, retention and data-subject processes." in response.text
-    assert "Evidence stage" in response.text
+    assert "Selected brand" in response.text
+    assert "Privacy, consent and personal data" in response.text
+    assert "Review stage" in response.text
+    assert "Evidence stage" not in response.text
     assert 'data-analysis-standard value="GDPR" checked' in response.text
     assert 'data-analysis-standard value="ISO 27001" checked' in response.text
     assert 'data-analysis-standard value="SOC 2 Type II" checked' in response.text
@@ -645,6 +647,17 @@ def test_legal_kit_has_only_one_active_primary_navigation_item():
     assert '<a class="nav-item active" href="/legal" aria-current="page">' in html
 
 
+def test_brand_level_alignment_report_and_review_history_have_schema_and_migration():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    schema = (root / "schema.sql").read_text(encoding="utf-8").lower()
+    migration = (root / "migrations/20261021_brand_review_reports.sql").read_text(encoding="utf-8").lower()
+    for field in ("legal_review_report", "legal_review_status", "legal_review_updated_at", "legal_review_history"):
+        assert field in schema
+        assert f"add column if not exists {field}" in migration
+    assert "notify pgrst, 'reload schema'" in migration
+
+
 def test_legal_entries_are_linked_to_brand_kits_in_schema_and_migration():
     from pathlib import Path
     root = Path(__file__).parents[1]
@@ -680,7 +693,7 @@ def test_brand_kits_has_two_consistent_creation_pathways_and_no_repeated_create_
     assert response.status_code == 200
     html = response.text
     assert "I know what I want" in html
-    assert "Help me find the direction" in html
+    assert "Guided Brand Design" in html
     assert 'action="/kits/new"' in html
     assert 'action="/kits/guided"' in html
     assert html.count('action="/kits/new"') == 1
@@ -778,8 +791,8 @@ def test_brand_kits_page_uses_top_level_existing_and_create_tabs():
     assert response.status_code == 200
     html = response.text
     assert 'role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs' in html
-    assert 'data-kit-page-tab="existing"' in html and '>Existing</button>' in html
-    assert 'data-kit-page-tab="create"' in html and '>Create a brand kit</button>' in html
+    assert 'data-kit-page-tab="existing"' in html and '>Existing Brand Kits</button>' in html
+    assert 'data-kit-page-tab="create"' in html and '>Create a Brand Kit</button>' in html
     assert 'data-kit-page-panel="existing"' in html
     assert 'data-kit-page-panel="create"' in html
     assert 'data-pathway-tab="brief"' in html and 'data-pathway-tab="guided"' in html
@@ -787,21 +800,23 @@ def test_brand_kits_page_uses_top_level_existing_and_create_tabs():
     assert "activateKitPage" in js and "ArrowLeft" in js
 
 
-def test_legal_kit_uses_framework_checkboxes_and_progressive_evidence_flow():
+def test_legal_kit_uses_framework_checkboxes_and_one_brand_report_review_stage():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/legal?brand_kit_id=starter-kit-002")
     assert response.status_code == 200
     html = response.text
     assert "Northline Outdoors" in html
-    assert "Include frameworks in this review" in html
+    assert "Assess against" in html
     for standard in ["GDPR", "ISO 27001", "SOC 2 Type II"]:
         assert f'data-analysis-standard value="{standard}" checked' in html
-        assert f">{standard}</h3>" in html
     assert 'data-analyze-compliance' in html
-    assert 'data-evidence-flow' in html
-    assert "Not started" in html and "Collecting evidence" in html and "Ready for review" in html and "Reviewed" in html
-    assert "Evidence-led tracking" not in html
+    assert 'data-report-workflow hidden' in html
+    assert "Review stage" in html
+    assert "Evidence workflow" not in html
+    assert "Include frameworks in this review" not in html
+    assert "have evidence recorded" not in html
+    assert 'data-legal-entry' not in html
     assert 'class="legal-standard-card"' not in html
     assert 'data-compliance-analysis hidden tabindex="-1"' in html
 
@@ -832,6 +847,54 @@ def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkey
     assert captured["standards"] == ["GDPR", "ISO 27001"]
     assert all(str(entry.get("brand_kit_id")) == "starter-kit-002" for entry in captured["entries"])
 
+
+
+def test_brand_alignment_report_and_review_history_are_saved_per_brand(monkeypatch):
+    from copy import deepcopy
+    from app import main as main_module
+
+    if main_module.store.supabase_enabled:
+        return  # Live persistence needs the configured Supabase report migration.
+    kit = main_module.store.get_kit_by_id("starter-kit-002")
+    assert kit is not None
+    fields = {key: deepcopy(kit.get(key)) for key in (
+        "legal_review_report", "legal_review_status", "legal_review_updated_at", "legal_review_history"
+    )}
+    monkeypatch.setattr(main_module, "generate_legal_analysis", lambda _kit, _entries, standards: {
+        "summary": "The selected brand content needs review against the selected themes.",
+        "standards": [{
+            "standard": standard,
+            "alignment_assessment": "Partially aligned",
+            "aligned_content": ["The brand description is present."],
+            "alignment_gaps": ["Privacy language is not supplied."],
+            "recommended_changes": ["Add the relevant privacy content."],
+        } for standard in standards],
+    })
+    client = TestClient(app)
+    try:
+        _sign_in(client, "client", "FormaClient!2026")
+        page = client.get("/legal?brand_kit_id=starter-kit-002")
+        csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+        analyzed = client.post("/api/legal/analyze", headers={"X-CSRF-Token": csrf}, json={
+            "brand_kit_id": "starter-kit-002", "standards": ["GDPR", "ISO 27001"]
+        })
+        assert analyzed.status_code == 200
+        assert analyzed.json()["persisted"] is True
+        assert kit["legal_review_status"] == "analysis_ready"
+        assert kit["legal_review_report"]["frameworks"] == ["GDPR", "ISO 27001"]
+        update = client.put("/api/legal/review", headers={"X-CSRF-Token": csrf}, json={
+            "brand_kit_id": "starter-kit-002", "status": "in_review", "note": "Initial content review"
+        })
+        assert update.status_code == 200
+        assert update.json()["status"] == "in_review"
+        assert update.json()["history"][-1]["changed_at"]
+        assert update.json()["history"][-1]["note"] == "Initial content review"
+        refreshed = client.get("/legal?brand_kit_id=starter-kit-002").text
+        assert "The selected brand content needs review" in refreshed
+        assert "Initial content review" in refreshed
+        assert "In review" in refreshed
+    finally:
+        kit.update(fields)
 
 def test_legal_analysis_rejects_brand_not_accessible_to_current_user(monkeypatch):
     from app import main as main_module
@@ -901,4 +964,5 @@ def test_legal_analysis_prompt_treats_brand_assets_as_input_not_proof_of_complia
     assert '"Northline Outdoors"' in prompt
     assert "do not determine legal compliance" in prompt.lower() or "do not declare" in prompt.lower()
     assert '"SOC 2 Type II"' not in prompt
-    assert "gaps_to_check" in prompt.lower()
+    assert "alignment_gaps" in prompt.lower()
+    assert "existing_evidence_tracker" not in prompt.lower()
