@@ -9,21 +9,27 @@
       <a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a>
       
     </nav>
-    <div class="sidebar-bottom"><button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance</button><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
+    <div class="sidebar-bottom"><button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
   </aside>
   <main id="main-content" tabindex="-1" class="app-main">
     <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
     <div class="page-content brand-kits-page">
       <section class="page-intro"><div><h1>Brand Kits</h1></div></section>
       {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>You can stay in the workspace, but changes cannot be saved until storage is available.</p></div>{% endif %}
+      <div class="kit-page-tabs" role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs data-default-kit-view="{{ 'create' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'existing' }}">
+        <button type="button" role="tab" id="kit-page-tab-existing" aria-controls="kit-page-panel-existing" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'true' }}" data-kit-page-tab="existing" class="{{ '' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'active' }}">Existing</button>
+        <button type="button" role="tab" id="kit-page-tab-create" aria-controls="kit-page-panel-create" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'false' }}" data-kit-page-tab="create" class="{{ 'active' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else '' }}">Create a brand kit</button>
+      </div>
+      <section id="kit-page-panel-existing" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-existing" data-kit-page-panel="existing" {% if guided_error or guided_form.get('idea') or (not kits and not workspace_error) %}hidden{% endif %}>
       {% if kits %}
       <section class="kits-section" aria-label="Existing brand kits">
-        <div class="section-title-row"><div><h2>Existing kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div>
+        <div class="section-title-row"><div><h2>Your brand kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div>
         <div class="kit-grid" data-kit-grid>{% for kit in kits %}<article class="kit-card" data-kit-card data-search-text="{{ (kit.brand_name ~ ' ' ~ kit.name ~ ' ' ~ kit.industry)|lower }}"><div class="kit-card-top"><div class="kit-monogram">{{ (kit.brand_name or kit.name)[0]|upper }}</div><span class="status-pill {{ 'status-live' if kit.status == 'published' else 'status-draft' }}">{{ 'Published' if kit.status == 'published' else 'Draft' }}</span></div><h3>{{ kit.brand_name or kit.name }}</h3><p>{{ kit.description or kit.industry or 'Brand identity in progress.' }}</p><div class="kit-card-meta"><span>{{ kit.blocks|rejectattr('type', 'in', ['3D Models', 'Collaterals'])|list|length }} components</span><span>{{ kit.access_mode|capitalize }} access</span></div><div class="kit-card-footer"><a href="/kits/{{ kit.id }}" class="text-link">Edit kit</a>{% if kit.status == 'published' %}<a href="/b/{{ kit.slug }}" class="icon-text-link" target="_blank" rel="noopener">View published</a>{% endif %}<a href="/legal?brand_kit_id={{ kit.id }}" class="icon-text-link">Compliance</a></div></article>{% endfor %}</div>
         <p class="empty-search" data-empty-search hidden>No kits match that search.</p>
       </section>
-      {% elif not workspace_error %}<p class="no-kits-yet">No brand kits yet. Choose the path that best matches where you are with the brand.</p>{% endif %}
-
+      {% elif not workspace_error %}<div class="empty-state brand-kits-empty"><h2>No brand kits yet</h2><p>Your existing brand kits will appear here after you create one.</p></div>{% endif %}
+      </section>
+      <section id="kit-page-panel-create" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-create" data-kit-page-panel="create" {% if not (guided_error or guided_form.get('idea') or (not kits and not workspace_error)) %}hidden{% endif %}>
       <section id="create-kit" class="creation-pathways" aria-labelledby="create-heading" data-pathway-switcher data-default-path="{{ 'guided' if guided_error or guided_form.get('idea') else 'brief' }}">
         <div class="pathways-heading"><h2 id="create-heading">Create a brand kit</h2></div>
         {% if guided_error %}<div class="alert alert-error guided-create-alert" role="status">{{ guided_error }}</div>{% endif %}
@@ -53,6 +59,7 @@
             </form>
           </article>
         </section>
+      </section>
       </section>
     </div>
   </main>

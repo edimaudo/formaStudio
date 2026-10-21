@@ -136,6 +136,32 @@
     if (empty) empty.hidden = !query || visible > 0;
   });
 
+  document.querySelectorAll('[data-kit-page-tabs]').forEach(tablist => {
+    const tabs = [...tablist.querySelectorAll('[data-kit-page-tab]')];
+    const panels = [...document.querySelectorAll('[data-kit-page-panel]')];
+    function activateKitPage(name, focus = false) {
+      tabs.forEach(tab => {
+        const active = tab.dataset.kitPageTab === name;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach(panel => { panel.hidden = panel.dataset.kitPagePanel !== name; });
+      if (focus) tabs.find(tab => tab.dataset.kitPageTab === name)?.focus();
+    }
+    activateKitPage(tablist.dataset.defaultKitView || 'existing');
+    tabs.forEach(tab => tab.addEventListener('click', () => activateKitPage(tab.dataset.kitPageTab)));
+    tablist.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const focused = tabs.indexOf(document.activeElement);
+      const selected = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+      const current = focused >= 0 ? focused : Math.max(0, selected);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      activateKitPage(tabs[next].dataset.kitPageTab, true);
+    });
+  });
+
   document.querySelectorAll('[data-pathway-switcher]').forEach(switcher => {
     const tabs = [...switcher.querySelectorAll('[data-pathway-tab]')];
     const panels = [...switcher.querySelectorAll('[data-pathway-panel]')];
@@ -152,7 +178,9 @@
     switcher.querySelector('[data-pathway-tabs]')?.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
-      const current = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+      const focused = tabs.indexOf(document.activeElement);
+      const selected = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+      const current = focused >= 0 ? focused : Math.max(0, selected);
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
       activatePathway(tabs[next].dataset.pathwayTab, true);
     });
@@ -586,20 +614,101 @@
     }));
   }
 
+  const legalPage = document.querySelector('[data-legal-page]');
+  if (legalPage) {
+    const analyzeButton = legalPage.querySelector('[data-analyze-compliance]');
+    const resultPanel = legalPage.querySelector('[data-compliance-analysis]');
+    const resultSummary = legalPage.querySelector('[data-analysis-summary]');
+    const resultFindings = legalPage.querySelector('[data-analysis-findings]');
+    const analysisStatus = legalPage.querySelector('[data-analysis-status]');
+    const selectedKitId = analyzeButton?.dataset.brandKitId || '';
+
+    function addAnalysisList(parent, label, items) {
+      if (!Array.isArray(items) || !items.length) return;
+      const section = document.createElement('section'); section.className = 'analysis-finding-part';
+      const heading = document.createElement('h4'); heading.textContent = label; section.append(heading);
+      const list = document.createElement('ul');
+      items.slice(0, 5).forEach(value => { const item = document.createElement('li'); item.textContent = String(value); list.append(item); });
+      section.append(list); parent.append(section);
+    }
+    function renderLegalAnalysis(analysis) {
+      resultFindings.replaceChildren();
+      resultSummary.textContent = String(analysis?.summary || 'Review the material-specific observations and next steps below.');
+      if (analysis?.analysis_text) {
+        const text = document.createElement('p'); text.className = 'analysis-fallback-text'; text.style.whiteSpace = 'pre-wrap'; text.textContent = analysis.analysis_text; resultFindings.append(text); return;
+      }
+      const standards = Array.isArray(analysis?.standards) ? analysis.standards : [];
+      standards.forEach(item => {
+        const article = document.createElement('article'); article.className = 'analysis-finding-row';
+        const head = document.createElement('div'); head.className = 'analysis-finding-row-heading';
+        const title = document.createElement('h3'); title.textContent = String(item.standard || 'Framework');
+        const assessment = document.createElement('span'); assessment.className = 'status-pill'; assessment.textContent = String(item.materials_assessment || 'Needs review');
+        head.append(title, assessment); article.append(head);
+        addAnalysisList(article, 'Material identified', item.evidence_identified);
+        addAnalysisList(article, 'Gaps to check', item.gaps_to_check);
+        addAnalysisList(article, 'Suggested next actions', item.next_actions);
+        resultFindings.append(article);
+      });
+      if (!standards.length) {
+        const empty = document.createElement('p'); empty.textContent = 'No structured findings were returned. Try the analysis again.'; resultFindings.append(empty);
+      }
+    }
+    analyzeButton?.addEventListener('click', async () => {
+      const selectedStandards = [...legalPage.querySelectorAll('[data-analysis-standard]:checked')].map(input => input.value);
+      if (!selectedStandards.length) { analysisStatus.textContent = 'Select at least one framework to analyze.'; return; }
+      const prior = analyzeButton.textContent;
+      analysisStatus.textContent = 'Reviewing the selected brand material…';
+      resultPanel.hidden = false;
+      resultSummary.textContent = '';
+      resultFindings.replaceChildren();
+      setButtonLoading(analyzeButton, true, 'Analyzing brand…', prior);
+      try {
+        const response = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: selectedKitId, standards: selectedStandards } });
+        renderLegalAnalysis(response.analysis || {});
+        analysisStatus.textContent = 'Analysis complete. Review the findings before acting on them.';
+        resultPanel.focus?.({ preventScroll: true });
+      } catch (error) {
+        resultSummary.textContent = error.message;
+        analysisStatus.textContent = 'The analysis could not be completed.';
+      } finally { setButtonLoading(analyzeButton, false, '', prior); }
+    });
+    legalPage.querySelector('[data-clear-analysis]')?.addEventListener('click', () => {
+      resultPanel.hidden = true; resultSummary.textContent = ''; resultFindings.replaceChildren(); analysisStatus.textContent = '';
+      analyzeButton?.focus();
+    });
+  }
+
+  const evidenceStageLabels = { not_configured: 'Not started', in_progress: 'Collecting evidence', documented: 'Ready for review', verified: 'Reviewed' };
   document.querySelectorAll('[data-legal-entry]').forEach(card => {
+    const stepFlow = card.querySelector('[data-evidence-flow]');
+    function updateEvidenceFlow(status) {
+      const stages = ['not_configured', 'in_progress', 'documented', 'verified'];
+      const current = Math.max(0, stages.indexOf(status));
+      stepFlow?.querySelectorAll('.evidence-flow-step').forEach((step, index) => {
+        step.classList.toggle('is-complete', index < current);
+        step.classList.toggle('is-current', index === current);
+      });
+    }
+    card.querySelectorAll('[data-legal-status]').forEach(input => input.addEventListener('change', () => updateEvidenceFlow(input.value)));
     card.querySelector('[data-save-legal]')?.addEventListener('click', async event => {
       const button = event.currentTarget; const feedback = card.querySelector('[data-legal-feedback]'); const prior = button.textContent;
+      const selectedStatus = card.querySelector('[data-legal-status]:checked')?.value || 'not_configured';
       setButtonLoading(button, true, 'Saving…', prior);
       try {
         const result = await api(`/api/legal/${encodeURIComponent(card.dataset.entryId)}`, { method: 'PUT', body: {
-          status: card.querySelector('[data-legal-status]').value,
+          status: selectedStatus,
           document_url: card.querySelector('[data-legal-url]').value.trim(),
           access_mode: card.querySelector('[data-legal-access]').value,
           notes: card.querySelector('[data-legal-notes]').value
         }});
-        if (feedback) feedback.textContent = 'Saved.';
+        if (feedback) feedback.textContent = 'Evidence record saved.';
         const label = card.querySelector('[data-legal-status-label]');
-        if (label) { label.textContent = result.entry.status.replaceAll('_', ' '); label.classList.toggle('status-live', ['documented', 'verified'].includes(result.entry.status)); label.classList.toggle('status-draft', !['documented', 'verified'].includes(result.entry.status)); }
+        if (label) {
+          const newLabel = evidenceStageLabels[result.entry.status] || 'Not started';
+          label.textContent = newLabel;
+          label.classList.toggle('status-live', ['documented', 'verified'].includes(result.entry.status));
+          label.classList.toggle('status-draft', !['documented', 'verified'].includes(result.entry.status));
+        }
       } catch (error) { if (feedback) feedback.textContent = error.message; }
       finally { setButtonLoading(button, false, '', prior); }
     });

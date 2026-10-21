@@ -553,8 +553,11 @@ def test_legal_checklist_is_scoped_to_a_selected_brand():
     assert response.status_code == 200
     assert "Northline Outdoors" in response.text
     assert "Brand under review" in response.text
-    assert "Privacy notice and lawful-basis or consent materials" in response.text
-    assert "Evidence status" in response.text
+    assert "Privacy notices, lawful basis, retention and data-subject processes." in response.text
+    assert "Evidence stage" in response.text
+    assert 'data-analysis-standard value="GDPR" checked' in response.text
+    assert 'data-analysis-standard value="ISO 27001" checked' in response.text
+    assert 'data-analysis-standard value="SOC 2 Type II" checked' in response.text
     assert "You are not" not in response.text
     assert "Make it coherent." not in response.text
     assert "Keep the idea, identity, and handoff connected." not in response.text
@@ -761,7 +764,141 @@ def test_legal_empty_state_offers_create_brand_kit_not_open_brand_kits(monkeypat
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/legal")
     assert response.status_code == 200
-    assert "No brand work to assess yet" in response.text
-    assert 'href="/kits#create-kit"' in response.text
+    assert "No brand to review yet" in response.text
+    assert 'href="/kits"' in response.text
     assert "Create brand kit" in response.text
     assert "Open Brand Kits" not in response.text
+
+
+
+def test_brand_kits_page_uses_top_level_existing_and_create_tabs():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/kits")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs' in html
+    assert 'data-kit-page-tab="existing"' in html and '>Existing</button>' in html
+    assert 'data-kit-page-tab="create"' in html and '>Create a brand kit</button>' in html
+    assert 'data-kit-page-panel="existing"' in html
+    assert 'data-kit-page-panel="create"' in html
+    assert 'data-pathway-tab="brief"' in html and 'data-pathway-tab="guided"' in html
+    js = (__import__("pathlib").Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
+    assert "activateKitPage" in js and "ArrowLeft" in js
+
+
+def test_legal_kit_uses_framework_checkboxes_and_progressive_evidence_flow():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/legal?brand_kit_id=starter-kit-002")
+    assert response.status_code == 200
+    html = response.text
+    assert "Northline Outdoors" in html
+    assert "Include frameworks in this review" in html
+    for standard in ["GDPR", "ISO 27001", "SOC 2 Type II"]:
+        assert f'data-analysis-standard value="{standard}" checked' in html
+        assert f">{standard}</h3>" in html
+    assert 'data-analyze-compliance' in html
+    assert 'data-evidence-flow' in html
+    assert "Not started" in html and "Collecting evidence" in html and "Ready for review" in html and "Reviewed" in html
+    assert "Evidence-led tracking" not in html
+    assert 'class="legal-standard-card"' not in html
+    assert 'data-compliance-analysis hidden tabindex="-1"' in html
+
+
+def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkeypatch):
+    from app import main as main_module
+    captured = {}
+    def fake_analysis(kit, entries, standards):
+        captured["brand"] = kit["brand_name"]
+        captured["entries"] = entries
+        captured["standards"] = standards
+        return {"summary": "Review the records for Northline Outdoors.", "standards": [
+            {"standard": standard, "materials_assessment": "No relevant material identified",
+             "evidence_identified": [], "gaps_to_check": ["No relevant policy supplied"],
+             "next_actions": ["Add the relevant documentation"]} for standard in standards
+        ]}
+    monkeypatch.setattr(main_module, "generate_legal_analysis", fake_analysis)
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/legal?brand_kit_id=starter-kit-002")
+    csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+    response = client.post("/api/legal/analyze", headers={"X-CSRF-Token": csrf}, json={
+        "brand_kit_id": "starter-kit-002", "standards": ["GDPR", "ISO 27001"]
+    })
+    assert response.status_code == 200
+    assert response.json()["brand_name"] == "Northline Outdoors"
+    assert captured["brand"] == "Northline Outdoors"
+    assert captured["standards"] == ["GDPR", "ISO 27001"]
+    assert all(str(entry.get("brand_kit_id")) == "starter-kit-002" for entry in captured["entries"])
+
+
+def test_legal_analysis_rejects_brand_not_accessible_to_current_user(monkeypatch):
+    from app import main as main_module
+    monkeypatch.setattr(main_module, "generate_legal_analysis", lambda *args: (_ for _ in ()).throw(AssertionError("analysis should not run")))
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/legal")
+    csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+    response = client.post("/api/legal/analyze", headers={"X-CSRF-Token": csrf}, json={
+        "brand_kit_id": "starter-kit-001", "standards": ["GDPR"]
+    })
+    assert response.status_code == 404
+
+
+def test_appearance_button_has_no_decorative_bullet():
+    from pathlib import Path
+    templates = Path(__file__).parents[1] / "app/templates"
+    for template_name in ["dashboard.html", "brand_kits.html", "legal.html", "kit_editor.html"]:
+        html = (templates / template_name).read_text(encoding="utf-8")
+        assert '<button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button>' in html
+        assert 'sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance' not in html
+
+
+def test_key_text_and_control_boundaries_meet_wcag_aa_token_contrast_targets():
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+
+    def tokens(block):
+        return {key: value.upper() for key, value in re.findall(r"--([a-z-]+):\s*(#[0-9A-Fa-f]{6})", block)}
+
+    def luminance(hex_color):
+        channels = [int(hex_color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+        linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    def ratio(foreground, background):
+        first, second = sorted([luminance(foreground), luminance(background)], reverse=True)
+        return (first + 0.05) / (second + 0.05)
+
+    light_block = css.split(":root {", 1)[1].split("}", 1)[0]
+    dark_block = css.split('html[data-theme="dark"] {', 1)[1].split("}", 1)[0]
+    for name, token_block in [("light", light_block), ("dark", dark_block)]:
+        values = tokens(token_block)
+        for foreground in ("ink", "ink-soft", "muted", "brand"):
+            for background in ("bg", "surface", "surface-muted", "surface-raised"):
+                assert ratio(values[foreground], values[background]) >= 4.5, (name, foreground, background)
+        for background in ("bg", "surface"):
+            assert ratio(values["line-strong"], values[background]) >= 3, (name, "line-strong", background)
+
+
+def test_editor_layout_supports_text_enlargement_without_root_overflow():
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert "flex-basis: min(15.7rem, 20vw); width: min(15.7rem, 20vw);" in css
+    assert ".editor-intro { flex-wrap: wrap; min-width: 0; }" in css
+    assert ".editor-tabs { max-width: 100%; min-width: 0; overflow-x: auto;" in css
+    assert ".editor-actions .button { min-width: 0; max-width: 100%; white-space: normal;" in css
+
+
+def test_legal_analysis_prompt_treats_brand_assets_as_input_not_proof_of_compliance():
+    from app.main import build_legal_analysis_prompt
+    prompt = build_legal_analysis_prompt({
+        "brand_name": "Northline Outdoors", "description": "Outdoor gear", "blocks": [
+            {"type": "Brand Story", "title": "About", "content": "We make useful outdoor goods.", "asset_url": ""}
+        ]
+    }, [], ["GDPR", "ISO 27001"])
+    assert '"Northline Outdoors"' in prompt
+    assert "do not determine legal compliance" in prompt.lower() or "do not declare" in prompt.lower()
+    assert '"SOC 2 Type II"' not in prompt
+    assert "gaps_to_check" in prompt.lower()
