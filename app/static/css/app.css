@@ -311,7 +311,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: .2r
 .brand-kits-page .page-intro { align-items: center; }
 .brand-kits-page .kits-section { margin-bottom: 2rem; }
 .brand-kits-page .create-section { scroll-margin-top: 5rem; }
-.brand-kits-page .kit-card-footer { flex-wrap: wrap; justify-content: flex-start; gap: .9rem; }
+.brand-kits-page .kit-card-footer { flex-wrap: wrap; justify-content: flex-start; gap: .65rem; }
+.brand-kits-page .kit-card-footer .compliance-button { flex: 0 0 auto; min-height: 2.35rem; padding: .55rem .8rem; font-size: .76rem; text-decoration: none; }
+.brand-kits-page .kit-card-footer .compliance-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .brand-kits-empty { margin-bottom: 1.5rem; }
 .legal-brand-selector { display: flex; align-items: end; flex-wrap: wrap; gap: .8rem; margin: 0 0 1.5rem; padding: 1rem; border: 1px solid var(--line); border-radius: .8rem; background: var(--surface); }
 .legal-brand-selector > div { flex: 1 1 18rem; min-width: 0; }

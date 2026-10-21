@@ -966,3 +966,33 @@ def test_legal_analysis_prompt_treats_brand_assets_as_input_not_proof_of_complia
     assert '"SOC 2 Type II"' not in prompt
     assert "alignment_gaps" in prompt.lower()
     assert "existing_evidence_tracker" not in prompt.lower()
+
+
+
+def test_brand_card_compliance_is_a_prominent_button_link():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/kits")
+    assert response.status_code == 200
+    html = response.text
+    assert 'class="button button-secondary button-small compliance-button"' in html
+    assert 'href="/legal?brand_kit_id=starter-kit-002"' in html
+    assert 'aria-label="Open compliance review for Northline Outdoors"' in html
+
+
+def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/kits/starter-kit-002")
+    assert response.status_code == 200
+    html = response.text
+    sidebar = html.split('<aside id="workspace-sidebar"', 1)[1].split('</aside>', 1)[0]
+    assert 'project-nav-name' in sidebar
+    for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#share-settings"', 'href="#final-preview"'):
+        assert target not in sidebar
+    editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
+    assert 'href="#identity"' in editor_tabs
+    assert 'href="#brand-story"' in editor_tabs
+    assert 'href="#culture"' in editor_tabs
+    assert 'href="#share-settings"' in editor_tabs
+    assert 'href="#final-preview"' in editor_tabs
