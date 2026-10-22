@@ -106,3 +106,12 @@ See [ACCESSIBILITY_AUDIT.md](ACCESSIBILITY_AUDIT.md) for the source-level WCAG r
 The Brand Kits page offers two ways to start. **Start with my brief** creates a working kit from details the user already knows. **Get guided brand direction** sends the user's early idea to Gemini and creates an editable starting point with positioning, tagline, elevator pitch, brand story, color direction, typography direction, and visual direction. The resulting kit opens in the existing editor for refinement. If Gemini is unavailable, the user's answers are preserved and the manual brief path remains available.
 
 The authenticated workspace intentionally has no global app header or role badge. Navigation remains in the sidebar, with a mobile-only menu control on narrow screens. App login remains local to Forma Studio; Supabase is only used for workspace persistence and optional email verification.
+
+
+## Current brand editor
+
+The brand editor uses six primary tabs: Brand Definition, Brand Messaging, Brand Components, Brand Story, Cultural Lens, and Design Review. Brand Components exposes Colors, Typography, Logos, and Icons; previously saved Visuals, Videos, and Resources are preserved but hidden from the current interface, as are the commented-out 3D Models and Collaterals.
+
+Typography offers 50 curated Google Fonts families. Headline choices suggest a complementary body typeface and the live sample preview updates as choices change. The Google Fonts stylesheet is an optional browser dependency; system fallback fonts remain available if fonts cannot be fetched. Logo concepts offer wordmark, monogram, emblem, and combination previews styled using the current palette and headline font. These are concept mockups, not final vector artwork.
+
+Cultural Lens requests country/region context and sends the saved brand positioning and story for interpretation. Regions currently cover the US states and Canadian provinces/territories.

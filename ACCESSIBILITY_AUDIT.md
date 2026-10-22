@@ -24,3 +24,11 @@ Prior revisions tested theme-token contrast (lowest sampled normal-text contrast
 ## Manual validation still required
 
 Do not describe the deployed application as WCAG-conformant until the deployed build is tested with keyboard-only interaction, actual browser zoom/reflow (including 400% zoom where applicable), a supported screen reader such as VoiceOver or NVDA, and an automated checker such as axe. Test success/error announcements, dialog and mobile drawer behavior, the Brand Kits nested tabs, upload controls, access-request flows, video caption accuracy, both themes, and user-supplied brand colors/assets. The local automated tests do not establish these behaviors in a deployed browser and do not certify WCAG conformance.
+
+## Latest brand editor controls
+
+The current brand editor exposes six primary tab panels (Brand Definition, Brand Messaging, Brand Components, Brand Story, Cultural Lens, Design Review). Only the selected top-level panel is displayed. The component tab list is limited to Colors, Typography, Logos, and Icons; hidden legacy Visuals, Videos, and Resources blocks are serialized and preserved on save.
+
+Typography controls use explicit labels for the 50-family headline/body/accent font selectors, a suggested complementary body pairing, and visible live sample previews. Logo structures are presented as labelled native radio inputs inside a fieldset, with brand-aware visual concept previews. Cultural Lens includes labelled country and state/province selectors for Canada and the USA. The submitted cultural request includes the current positioning and Brand Story so the interpretation has the brand context rather than only a market name.
+
+Automated regression checks currently pass for these controls. This source-level review is not a formal WCAG 2.2 AA certification: manual testing with keyboard-only operation, screen readers, real browser zoom/reflow, and contrast evaluation on user-selected logo colors is still required.

@@ -1,9 +1,10 @@
 import re
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.main import BLOCK_TYPES, IDENTITY_BLOCK_TYPES, LEGACY_BLOCK_TYPES, LEGAL_STANDARDS, STORED_BLOCK_TYPES, DataStore, app, password_hash, slugify, verify_password, store
+from app.main import BLOCK_TYPES, FONT_FAMILIES, IDENTITY_BLOCK_TYPES, LEGACY_BLOCK_TYPES, LEGAL_STANDARDS, STORED_BLOCK_TYPES, DataStore, app, password_hash, slugify, verify_password, store
 
 
 def test_upload_directory_is_not_created_during_module_import():
@@ -30,7 +31,14 @@ def test_visible_brand_block_types_hide_legacy_3d_and_collateral_sections():
     assert "Collaterals" not in BLOCK_TYPES
     assert set(LEGACY_BLOCK_TYPES) == {"3D Models", "Collaterals"}
     assert set(LEGACY_BLOCK_TYPES).issubset(STORED_BLOCK_TYPES)
-    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources"]
+    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos", "Icons"]
+    assert len(FONT_FAMILIES) == 50
+    assert len(set(FONT_FAMILIES)) == 50
+    js_path = Path(__file__).parents[1] / "app/static/js/app.js"
+    js = js_path.read_text(encoding="utf-8")
+    pair_block = js.split("const preferredBodyFonts = {", 1)[1].split("};", 1)[0]
+    pairs = re.findall(r"'([^']+)'\s*:", pair_block)
+    assert len(pairs) == 50 and len(set(pairs)) == 50
 
 
 def test_legal_kit_standards_are_explicit():
@@ -592,15 +600,19 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     html = response.text
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     for target, label in [
-        ("identity", "Brand identity"),
-        ("brand-story", "Brand story"),
-        ("culture", "Cultural lens"),
+        ("definition", "Brand Definition"),
+        ("messaging", "Brand Messaging"),
+        ("components", "Brand Components"),
+        ("brand-story", "Brand Story"),
+        ("culture", "Cultural Lens"),
         ("design-review", "Design Review"),
     ]:
         assert f'data-editor-tab="{target}"' in editor_tabs
         assert label in editor_tabs
     assert 'id="design-review"' in html
     assert 'id="review-sharing"' not in html
+    assert 'data-editor-panel="messaging" hidden' in html
+    assert 'data-editor-panel="components" hidden' in html
     assert 'data-editor-panel="brand-story" hidden' in html
     assert 'data-editor-panel="culture" hidden' in html
     assert 'data-editor-panel="design-review" hidden' in html
@@ -619,7 +631,14 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'type="color"' in html
     assert 'data-typography-field="heading_font"' in html
     assert 'data-typography-field="body_font"' in html
+    assert html.count('data-typography-field="heading_font"') == 1
+    assert html.count('<option value="Inter"') >= 2
+    assert 'data-type-preview-headline' in html and 'data-type-preview-body' in html
     assert 'data-logo-direction' in html
+    assert 'data-logo-template-grid' in html
+    for template in ('wordmark', 'monogram', 'emblem', 'combination'):
+        assert f'data-logo-kind="{template}"' in html
+    assert 'data-logo-live-preview' in html
     assert 'data-preview-palette' in html
     assert 'data-preview-blocks' in html
     # The old 3D Models/Collaterals content is preserved in a non-rendering JSON payload,
@@ -997,9 +1016,34 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
         assert target not in sidebar
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     assert 'role="tablist"' in editor_tabs
-    for target in ('data-editor-tab="identity"', 'data-editor-tab="brand-story"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
+    for target in ('data-editor-tab="definition"', 'data-editor-tab="messaging"', 'data-editor-tab="components"', 'data-editor-tab="brand-story"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
         assert target in editor_tabs
-    panels = re.findall(r'<section id="(identity|brand-story|culture|design-review)".*?>', html)
-    assert panels == ['identity', 'brand-story', 'culture', 'design-review']
+    panels = re.findall(r'<section id="(brand-definition|brand-messaging|brand-components|brand-story|culture|design-review)".*?>', html)
+    assert panels == ['brand-definition', 'brand-messaging', 'brand-components', 'brand-story', 'culture', 'design-review']
     assert 'id="brand-story" class="editor-section editor-section-separated" role="tabpanel" aria-labelledby="editor-tab-brand-story" data-editor-panel="brand-story" hidden' in html
     assert '<h2 id="design-review-heading">Design Review</h2>' in html
+
+
+def test_editor_typography_has_50_fonts_and_brand_aware_logo_templates():
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    assert html.count('<option value=') >= 150
+    assert 'data-type-preview-headline' in html
+    assert 'data-type-preview-body' in html
+    assert 'data-logo-template-grid' in html
+    assert 'data-logo-lockup' in html
+    assert "preferredBodyFonts" in (Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
+
+def test_cultural_lens_uses_country_and_region_and_sends_brand_context():
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    js = (Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
+    assert 'data-culture-country' in html and 'data-culture-region' in html
+    assert 'value="Canada"' in html and 'value="United States">USA</option>' in html
+    assert 'brand_story:' in js and 'positioning:' in js

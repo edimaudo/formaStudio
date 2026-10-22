@@ -237,6 +237,132 @@
     const shareUrl = editor.querySelector('[data-share-url]');
     let saved = false;
 
+    const preferredBodyFonts = {
+      'Inter':'Source Serif 4','Roboto':'Merriweather','Open Sans':'Libre Baskerville','Lato':'Merriweather',
+      'Montserrat':'Lora','Poppins':'Inter','Source Sans 3':'Source Serif 4','Nunito Sans':'Lora',
+      'Work Sans':'Source Serif 4','DM Sans':'DM Serif Display','Manrope':'Literata','IBM Plex Sans':'Source Serif 4',
+      'Source Serif 4':'Source Sans 3','Merriweather':'Lato','Playfair Display':'Inter','Libre Baskerville':'Open Sans',
+      'Lora':'Nunito Sans','DM Serif Display':'DM Sans','Cormorant Garamond':'Inter','Fraunces':'DM Sans',
+      'Bricolage Grotesque':'Source Sans 3','Space Grotesk':'Inter','Sora':'Source Sans 3','Outfit':'Lato',
+      'Urbanist':'Source Sans 3','Plus Jakarta Sans':'Lora','Figtree':'Source Serif 4','Rubik':'Lora',
+      'Karla':'Libre Baskerville','Cabin':'Lora','Archivo':'Merriweather','Josefin Sans':'Lora',
+      'Raleway':'Merriweather','Oswald':'Source Sans 3','Bebas Neue':'Inter','Anton':'Open Sans',
+      'IBM Plex Mono':'IBM Plex Sans','Space Mono':'DM Sans','JetBrains Mono':'Inter','Inconsolata':'Inter',
+      'Fira Sans':'Lora','Noto Sans':'Noto Serif','Noto Serif':'Noto Sans','Spectral':'Figtree',
+      'Crimson Pro':'Manrope','Alegreya':'Work Sans','Literata':'Inter','Gabarito':'Source Serif 4',
+      'Epilogue':'Lora','Prata':'DM Sans'
+    };
+    const countryRegions = {
+      'Canada': ['Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador','Northwest Territories','Nova Scotia','Nunavut','Ontario','Prince Edward Island','Quebec','Saskatchewan','Yukon'],
+      'United States': ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','District of Columbia','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming']
+    };
+    function selectedColorValues() {
+      const colorBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Colors');
+      return [...(colorBlock?.querySelectorAll('[data-color-row]') || [])]
+        .map(row => row.querySelector('[data-color-hex]')?.value.trim().toUpperCase() || '')
+        .filter(hex => /^#[0-9A-F]{6}$/.test(hex));
+    }
+    function safeFontFamily(value, fallback) {
+      const font = String(value || '').replace(/["'\\;]/g, '').trim();
+      return font ? `"${font}", ${fallback}` : fallback;
+    }
+    function syncTypographyPreview(block, headingChanged = false) {
+      const headingSelect = block.querySelector('[data-typography-field="heading_font"]');
+      const bodySelect = block.querySelector('[data-typography-field="body_font"]');
+      const accentSelect = block.querySelector('[data-typography-field="accent_font"]');
+      if (!headingSelect || !bodySelect) return;
+      if (headingChanged && bodySelect.dataset.bodyAuto !== 'false') {
+        bodySelect.value = preferredBodyFonts[headingSelect.value] || 'Inter';
+        bodySelect.dataset.bodyAuto = 'true';
+      }
+      const headingFont = headingSelect.value || 'Playfair Display';
+      const bodyFont = bodySelect.value || preferredBodyFonts[headingFont] || 'Inter';
+      const titleSample = block.querySelector('[data-type-preview-headline]');
+      const bodySample = block.querySelector('[data-type-preview-body]');
+      const guidance = block.querySelector('[data-type-pair-guidance]');
+      const brandName = editor.querySelector('[data-field="brand_name"]')?.value.trim() || 'Your Brand Name';
+      if (titleSample) { titleSample.textContent = brandName; titleSample.style.fontFamily = safeFontFamily(headingFont, 'serif'); }
+      if (bodySample) bodySample.style.fontFamily = safeFontFamily(bodyFont, 'sans-serif');
+      if (guidance) guidance.textContent = `Suggested pairing: ${headingFont} with ${bodyFont}. Both choices remain editable.`;
+    }
+    function syncLogoPreviews() {
+      const brandName = editor.querySelector('[data-field="brand_name"]')?.value.trim() || 'Your Brand';
+      const colors = selectedColorValues();
+      const primary = colors[0] || '#354F45';
+      const accent = colors[2] || colors[1] || '#C97856';
+      const typography = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Typography');
+      const headlineFont = typography?.querySelector('[data-typography-field="heading_font"]')?.value || 'Playfair Display';
+      editor.querySelectorAll('[data-block-type="Logos"]').forEach(block => {
+        const selectedInput = block.querySelector('[data-logo-direction]:checked');
+        const selected = selectedInput?.value || 'wordmark';
+        block.querySelectorAll('[data-logo-direction]').forEach(input => {
+          const option = input.closest('.logo-template-option');
+          if (option) option.classList.toggle('is-selected', input.checked);
+        });
+        block.querySelectorAll('[data-logo-kind]').forEach(preview => {
+          preview.style.setProperty('--logo-primary', primary);
+          preview.style.setProperty('--logo-accent', accent);
+          preview.style.setProperty('--logo-font', safeFontFamily(headlineFont, 'serif'));
+          const kind = preview.dataset.logoKind;
+          const symbol = preview.querySelector('.logo-template-symbol');
+          const name = preview.querySelector('[data-logo-sample-name]');
+          if (name) name.textContent = brandName;
+          if (symbol) {
+            symbol.textContent = kind === 'emblem' ? '✳' : (kind === 'monogram' || kind === 'combination' ? brandName.slice(0, 1).toUpperCase() : '');
+            symbol.hidden = !symbol.textContent;
+          }
+        });
+        const live = block.querySelector('[data-logo-lockup]');
+        if (live) {
+          live.dataset.logoKind = selected;
+          live.style.setProperty('--logo-primary', primary);
+          live.style.setProperty('--logo-accent', accent);
+          live.style.setProperty('--logo-font', safeFontFamily(headlineFont, 'serif'));
+        }
+        const liveSymbol = block.querySelector('[data-logo-live-symbol]');
+        const liveName = block.querySelector('[data-logo-live-name]');
+        if (liveSymbol) {
+          liveSymbol.textContent = selected === 'emblem' ? '✳' : (selected === 'monogram' || selected === 'combination' ? brandName.slice(0,1).toUpperCase() : '');
+          liveSymbol.hidden = !liveSymbol.textContent;
+        }
+        if (liveName) liveName.textContent = brandName;
+      });
+    }
+    function initializeTypographyAndLogos() {
+      editor.querySelectorAll('[data-block-type="Typography"]').forEach(block => {
+        const bodySelect = block.querySelector('[data-typography-field="body_font"]');
+        if (bodySelect && bodySelect.dataset.bodyAuto !== 'false') {
+          bodySelect.dataset.bodyAuto = bodySelect.dataset.bodyAuto || 'true';
+          syncTypographyPreview(block, true);
+        } else syncTypographyPreview(block);
+        block.querySelector('[data-typography-field="heading_font"]')?.addEventListener('change', () => { syncTypographyPreview(block, true); syncLogoPreviews(); renderFinalPreview(); });
+        bodySelect?.addEventListener('change', () => { bodySelect.dataset.bodyAuto = 'false'; syncTypographyPreview(block); syncLogoPreviews(); renderFinalPreview(); });
+        block.querySelector('[data-typography-field="accent_font"]')?.addEventListener('change', () => { syncTypographyPreview(block); renderFinalPreview(); });
+      });
+      editor.querySelectorAll('[data-logo-direction]').forEach(input => input.addEventListener('change', () => { syncLogoPreviews(); renderFinalPreview(); }));
+      syncLogoPreviews();
+    }
+    function initializeMarketSelectors() {
+      const country = editor.querySelector('[data-culture-country]');
+      const region = editor.querySelector('[data-culture-region]');
+      const market = editor.querySelector('[data-culture-market]');
+      if (!country || !region || !market) return;
+      function updateMarket(rebuild = false) {
+        const values = countryRegions[country.value] || countryRegions.Canada;
+        if (rebuild) {
+          const preferred = country.value === 'Canada' ? 'Ontario' : 'California';
+          region.replaceChildren();
+          values.forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; region.append(option); });
+          region.value = values.includes(preferred) ? preferred : values[0];
+        }
+        market.value = `${country.value}, ${region.value}`;
+      }
+      updateMarket();
+      country.addEventListener('change', () => { updateMarket(true); });
+      region.addEventListener('change', () => updateMarket(false));
+    }
+    initializeMarketSelectors();
+
     function blockData() {
       const visibleBlocks = [...editor.querySelectorAll('[data-block]')].map(block => {
         const data = {
@@ -255,7 +381,7 @@
         } else if (data.type === 'Typography') {
           data.typography = Object.fromEntries(['heading_font', 'body_font', 'accent_font'].map(key => [key, block.querySelector(`[data-typography-field="${key}"]`)?.value.trim() || '']));
         } else if (data.type === 'Logos') {
-          data.logo_direction = block.querySelector('[data-logo-direction]')?.value || 'explore';
+          data.logo_direction = block.querySelector('[data-logo-direction]:checked')?.value || 'wordmark';
           data.logo_brief = block.querySelector('[data-logo-brief]')?.value.trim() || '';
         } else if (data.type === 'Visuals') {
           data.visual_style = Object.fromEntries(['photography', 'lighting', 'texture'].map(key => [key, block.querySelector(`[data-visual-field="${key}"]`)?.value.trim() || '']));
@@ -364,6 +490,12 @@
     }
     editor.addEventListener('input', event => {
       if (event.target.matches('[data-color-picker], [data-color-hex]')) updateColorPicker(event.target.closest('[data-color-row]'), event.target);
+      if (event.target.matches('[data-field="brand_name"], [data-color-picker], [data-color-hex], [data-color-name], [data-logo-brief], [data-block-content]')) syncLogoPreviews();
+      if (event.target.matches('[data-field="brand_name"]')) editor.querySelectorAll('[data-block-type="Typography"]').forEach(block => syncTypographyPreview(block));
+      if (event.target.matches('[data-field="tagline"], [data-field="elevator_pitch"], [data-field="description"]')) {
+        const positioning = editor.querySelector('#copy-positioning');
+        if (positioning && positioning.dataset.userEdited !== 'true') positioning.value = [editor.querySelector('[data-field="tagline"]')?.value.trim(), editor.querySelector('[data-field="elevator_pitch"]')?.value.trim(), editor.querySelector('[data-field="description"]')?.value.trim()].filter(Boolean).join('\n\n');
+      }
       renderFinalPreview();
     });
     editor.addEventListener('click', event => {
@@ -477,7 +609,9 @@
       if (cultureSection) cultureSection.hidden = !cultureSummary;
     }
     renderFinalPreview();
+    initializeTypographyAndLogos();
 
+    editor.querySelector('#copy-positioning')?.addEventListener('input', event => { event.currentTarget.dataset.userEdited = 'true'; });
     blockList?.addEventListener('click', async event => {
       const upload = event.target.closest('[data-upload-asset], [data-upload-captions]');
       if (upload) {
@@ -570,11 +704,11 @@
       if (status) status.textContent = 'Considering structure, personality, and practical use…';
       try {
         const result = await api('/api/ai/copy', { method: 'POST', body: {
-          task: 'Logo direction', brand_name: editor.querySelector('[data-field="brand_name"]').value,
+          task: 'Logo concept recommendations', brand_name: editor.querySelector('[data-field="brand_name"]').value,
           industry: editor.querySelector('[data-field="industry"]').value, audience: editor.querySelector('[data-field="audience"]').value,
-          positioning: editor.querySelector('[data-field="description"]').value,
-          tone: block.querySelector('[data-logo-direction]').value,
-          key_points: brief.slice(0, 900)
+          positioning: [editor.querySelector('[data-field="tagline"]').value, editor.querySelector('[data-field="elevator_pitch"]').value, editor.querySelector('[data-field="description"]').value].filter(Boolean).join('\n'),
+          tone: block.querySelector('[data-logo-direction]:checked')?.value || 'wordmark',
+          key_points: [brief, `Color palette: ${selectedColorValues().join(', ')}`, `Headline font: ${editor.querySelector('[data-block-type="Typography"] [data-typography-field="heading_font"]')?.value || 'not selected'}`, `Body font: ${editor.querySelector('[data-block-type="Typography"] [data-typography-field="body_font"]')?.value || 'not selected'}`, 'Return three distinct, usable logo concept directions that work with the supplied colors and type system.'].join('\n').slice(0, 1400)
         }});
         block.querySelector('[data-block-content]').value = result.copy; renderFinalPreview();
         if (status) status.textContent = 'Direction generated. Edit it before saving.';
@@ -608,7 +742,8 @@
       story.querySelector('[data-block-content]').value = copy;
       renderFinalPreview();
       if (feedback) feedback.textContent = 'Story draft applied. Save changes to keep it.';
-      story.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      editor.querySelector('[data-editor-tab="brand-story"]')?.click();
+      story.querySelector('[data-block-content]')?.focus({ preventScroll: true });
     });
     editor.querySelector('[data-copy-copy]')?.addEventListener('click', async event => {
       const button = event.currentTarget; const original = button.textContent;
@@ -627,7 +762,9 @@
           industry: editor.querySelector('[data-field="industry"]').value,
           audience: editor.querySelector('[data-field="audience"]').value,
           market: editor.querySelector('#culture-market').value,
-          values: editor.querySelector('#culture-values').value
+          values: editor.querySelector('#culture-values').value,
+          positioning: [editor.querySelector('[data-field="tagline"]')?.value, editor.querySelector('[data-field="elevator_pitch"]')?.value, editor.querySelector('[data-field="description"]')?.value].filter(Boolean).join('\n').slice(0, 1000),
+          brand_story: ([...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story')?.querySelector('[data-block-content]')?.value || '').slice(0, 1800)
         }});
         results.replaceChildren();
         const heading = document.createElement('h3'); heading.textContent = response.matched_entity ? `Signals related to ${response.matched_entity.name}` : 'Cultural signals'; results.append(heading);

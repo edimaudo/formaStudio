@@ -46,3 +46,8 @@ The brand editor includes persistent tagline and elevator-pitch fields alongside
 - **Overview** is a summary of brands already created and their publication state. It does not include brand-creation forms.
 - **Brand Kits** is the distinct management page for finding, creating, and editing kits.
 - **Legal Kit** selects a brand, assesses its content against chosen frameworks, and stores one content-alignment report. Frameworks are shown as findings inside the report, not as separate workflow cards.
+
+
+## Brand definition and component editors
+
+The editor's primary navigation separates definition, messaging, components, story, cultural lens, and design review into tab panels. Typography uses a curated 50-family selector with recommended complementary body pairings and live font samples. Logo templates are selectable concept layouts whose previews inherit the current brand palette and headline family. Component navigation currently shows Colors, Typography, Logos, and Icons. Existing Visuals, Videos, and Resources blocks are preserved in serialized hidden state; 3D Models and Collaterals remain hidden legacy content.

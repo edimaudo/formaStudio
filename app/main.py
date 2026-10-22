@@ -156,7 +156,31 @@ validate_base_url("QLOO_BASE_URL", QLOO_BASE_URL)
 BLOCK_TYPES = [
     "Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources", "Brand Story",
 ]
-IDENTITY_BLOCK_TYPES = ["Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources"]
+IDENTITY_BLOCK_TYPES = ["Colors", "Typography", "Logos", "Icons"]
+FONT_FAMILIES = [
+    "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins", "Source Sans 3", "Nunito Sans",
+    "Work Sans", "DM Sans", "Manrope", "IBM Plex Sans", "Source Serif 4", "Merriweather", "Playfair Display",
+    "Libre Baskerville", "Lora", "DM Serif Display", "Cormorant Garamond", "Fraunces", "Bricolage Grotesque",
+    "Space Grotesk", "Sora", "Outfit", "Urbanist", "Plus Jakarta Sans", "Figtree", "Rubik", "Karla",
+    "Cabin", "Archivo", "Josefin Sans", "Raleway", "Oswald", "Bebas Neue", "Anton", "IBM Plex Mono",
+    "Space Mono", "JetBrains Mono", "Inconsolata", "Fira Sans", "Noto Sans", "Noto Serif", "Spectral",
+    "Crimson Pro", "Alegreya", "Literata", "Gabarito", "Epilogue", "Prata",
+]
+FONT_BODY_PAIRINGS = {
+    "Inter": "Source Serif 4", "Roboto": "Merriweather", "Open Sans": "Libre Baskerville", "Lato": "Merriweather",
+    "Montserrat": "Lora", "Poppins": "Inter", "Source Sans 3": "Source Serif 4", "Nunito Sans": "Lora",
+    "Work Sans": "Source Serif 4", "DM Sans": "DM Serif Display", "Manrope": "Literata", "IBM Plex Sans": "Source Serif 4",
+    "Source Serif 4": "Source Sans 3", "Merriweather": "Lato", "Playfair Display": "Inter", "Libre Baskerville": "Open Sans",
+    "Lora": "Nunito Sans", "DM Serif Display": "DM Sans", "Cormorant Garamond": "Inter", "Fraunces": "DM Sans",
+    "Bricolage Grotesque": "Source Sans 3", "Space Grotesk": "Inter", "Sora": "Source Sans 3", "Outfit": "Lato",
+    "Urbanist": "Source Sans 3", "Plus Jakarta Sans": "Lora", "Figtree": "Source Serif 4", "Rubik": "Lora",
+    "Karla": "Libre Baskerville", "Cabin": "Lora", "Archivo": "Merriweather", "Josefin Sans": "Lora",
+    "Raleway": "Merriweather", "Oswald": "Source Sans 3", "Bebas Neue": "Inter", "Anton": "Open Sans",
+    "IBM Plex Mono": "IBM Plex Sans", "Space Mono": "DM Sans", "JetBrains Mono": "Inter", "Inconsolata": "Inter",
+    "Fira Sans": "Lora", "Noto Sans": "Noto Serif", "Noto Serif": "Noto Sans", "Spectral": "Figtree",
+    "Crimson Pro": "Manrope", "Alegreya": "Work Sans", "Literata": "Inter", "Gabarito": "Source Serif 4",
+    "Epilogue": "Lora", "Prata": "DM Sans",
+}
 # Temporarily disabled in the product interface; existing stored assets remain preserved:
 # "3D Models",
 # "Collaterals",
@@ -933,7 +957,8 @@ def edit_kit(request: Request, kit_id: str) -> Any:
     hidden_legacy_blocks: list[dict[str, Any]] = []
     source_blocks = [dict(block) for block in (kit.get("blocks") or [])]
     for block in source_blocks:
-        if block.get("type") in LEGACY_BLOCK_TYPES:
+        if block.get("type") in LEGACY_BLOCK_TYPES or block.get("type") in {"Visuals", "Videos", "Resources"}:
+            # These blocks are hidden in the current editor but retained on save.
             hidden_legacy_blocks.append(block)
         elif block.get("type") in BLOCK_TYPES:
             visible_blocks.append(block)
@@ -941,10 +966,7 @@ def edit_kit(request: Request, kit_id: str) -> Any:
         "Colors": ("Color palette", "Choose color values and record where they should be used."),
         "Typography": ("Type system", "Choose heading and body typefaces and define their hierarchy."),
         "Logos": ("Logo direction", "Explore a form and visual character before producing final artwork."),
-        "Visuals": ("Visual direction", "Describe image style, materials, lighting, and composition."),
-        "Videos": ("Motion and video", "Describe motion principles and how video should feel."),
         "Icons": ("Icon system", "Define shape, stroke, density, and where icons are useful."),
-        "Resources": ("Brand resources", "Collect working files, usage guidance, and references."),
         "Brand Story": ("Brand story", "What should people understand, feel, and remember?"),
     }
     existing_types = {block.get("type") for block in visible_blocks}
@@ -981,7 +1003,9 @@ def edit_kit(request: Request, kit_id: str) -> Any:
                                    "body_font": str(typography.get("body_font", "")),
                                    "accent_font": str(typography.get("accent_font", ""))}
         elif block.get("type") == "Logos":
-            block["logo_direction"] = str(block.get("logo_direction") or "explore")
+            block["logo_direction"] = str(block.get("logo_direction") or "wordmark")
+            if block["logo_direction"] not in {"wordmark", "monogram", "emblem", "combination"}:
+                block["logo_direction"] = "wordmark"
             block["logo_brief"] = str(block.get("logo_brief") or "")
         elif block.get("type") == "Visuals":
             block["visual_style"] = dict(block.get("visual_style") or {})
@@ -991,7 +1015,7 @@ def edit_kit(request: Request, kit_id: str) -> Any:
             block["icon_style"] = dict(block.get("icon_style") or {})
     return render(request, "kit_editor.html", {"page_title": kit.get("name", "Brand kit"), "kit": kit,
                   "block_types": BLOCK_TYPES, "identity_block_types": IDENTITY_BLOCK_TYPES,
-                  "editor_blocks": visible_blocks, "hidden_legacy_blocks": hidden_legacy_blocks,
+                  "font_families": FONT_FAMILIES, "editor_blocks": visible_blocks, "hidden_legacy_blocks": hidden_legacy_blocks,
                   "share_url": str(request.base_url).rstrip("/") + f"/b/{kit['slug']}"})
 
 
@@ -1350,8 +1374,10 @@ class CultureRequest(BaseModel):
     brand_name: str = Field(default="", max_length=120)
     industry: str = Field(min_length=2, max_length=100)
     audience: str = Field(default="", max_length=240)
-    market: str = Field(default="North America", max_length=120)
+    market: str = Field(default="Canada, Ontario", max_length=120)
     values: str = Field(default="", max_length=500)
+    positioning: str = Field(default="", max_length=1000)
+    brand_story: str = Field(default="", max_length=1800)
 
 
 def extract_qloo_entities(payload: Any) -> list[dict[str, Any]]:
@@ -1424,7 +1450,7 @@ async def cultural_signals(request: Request, payload: CultureRequest) -> JSONRes
                     "Interpret these retrieved Qloo cultural tags as cautious brand design inputs. "
                     "Separate observed tags from hypotheses; do not infer protected traits or claim causation. "
                     "Give three concise implications for visual language, tone, or audience fit. "
-                    f"Brand/category: {query}. Audience and values supplied by user: {payload.audience}; {payload.values}. "
+                    f"Brand/category/market: {query}. Audience, positioning, and story supplied by user: {payload.audience}; {payload.positioning}; {payload.brand_story}; {payload.values}. "
                     f"Retrieved tags: {json.dumps(tags[:10], ensure_ascii=False)}"
                 )
                 generated = client.models.generate_content(model=GEMINI_MODEL, contents=summary_prompt)
