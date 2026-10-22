@@ -186,6 +186,114 @@
     });
   });
 
+  document.querySelectorAll('[data-guided-create]').forEach(form => {
+    const questionFlow = form.querySelector('[data-guided-questions]');
+    const reviewPanel = form.querySelector('[data-guided-review]');
+    const steps = [...form.querySelectorAll('[data-guided-step]')];
+    const backButton = form.querySelector('[data-guided-back]');
+    const nextButton = form.querySelector('[data-guided-next]');
+    const buildStrategyButton = form.querySelector('[data-guided-build-strategy]');
+    const status = form.querySelector('[data-guided-status]');
+    const stepLabel = form.querySelector('[data-guided-step-label]');
+    const stepTopic = form.querySelector('[data-guided-step-topic]');
+    const progress = form.querySelector('[data-guided-progress]');
+    const topics = ['Starting point', 'Audience', 'Value', 'Differentiation', 'Personality', 'Voice'];
+    if (!questionFlow || !reviewPanel || !steps.length) return;
+    let currentStep = Math.max(0, steps.findIndex(step => !step.hidden));
+    const initiallyReviewing = form.dataset.guidedStage === 'review' && !reviewPanel.hidden;
+
+    function showStep(index, focus = false) {
+      currentStep = Math.max(0, Math.min(steps.length - 1, index));
+      steps.forEach((step, i) => { step.hidden = i !== currentStep; });
+      if (stepLabel) stepLabel.textContent = `Question ${currentStep + 1} of ${steps.length}`;
+      if (stepTopic) stepTopic.textContent = topics[currentStep] || 'Brand strategy';
+      if (progress) {
+        progress.setAttribute('aria-valuenow', String(currentStep + 1));
+        const fill = progress.querySelector('span');
+        if (fill) fill.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+      }
+      if (backButton) backButton.disabled = currentStep === 0;
+      if (nextButton) nextButton.hidden = currentStep === steps.length - 1;
+      if (buildStrategyButton) buildStrategyButton.hidden = currentStep !== steps.length - 1;
+      if (focus) steps[currentStep].querySelector('textarea, input, select')?.focus();
+    }
+    function showQuestions(step = currentStep, focus = true) {
+      reviewPanel.hidden = true;
+      questionFlow.hidden = false;
+      form.dataset.guidedStage = 'questions';
+      if (status) status.textContent = '';
+      showStep(step, focus);
+    }
+    function currentStepIsValid() {
+      const control = steps[currentStep]?.querySelector('textarea, input, select');
+      if (!control) return true;
+      if (control.required && !control.value.trim()) {
+        control.reportValidity();
+        return false;
+      }
+      if (!control.checkValidity()) {
+        control.reportValidity();
+        return false;
+      }
+      return true;
+    }
+    if (initiallyReviewing) {
+      questionFlow.hidden = true;
+      reviewPanel.hidden = false;
+    } else {
+      reviewPanel.hidden = true;
+      questionFlow.hidden = false;
+      showStep(currentStep);
+    }
+    nextButton?.addEventListener('click', () => {
+      if (!currentStepIsValid()) return;
+      showStep(currentStep + 1, true);
+    });
+    backButton?.addEventListener('click', () => showStep(currentStep - 1, true));
+    form.querySelectorAll('[data-guided-edit-answers]').forEach(button => button.addEventListener('click', () => showQuestions(0, true)));
+
+    form.addEventListener('submit', async event => {
+      if (form.dataset.guidedStage === 'review' && !reviewPanel.hidden) return;
+      event.preventDefault();
+      if (!currentStepIsValid()) return;
+      if (currentStep < steps.length - 1) {
+        showStep(currentStep + 1, true);
+        return;
+      }
+      const button = buildStrategyButton;
+      const prior = button?.textContent || 'Develop brand strategy';
+      if (button) setButtonLoading(button, true, 'Developing strategy…', prior);
+      if (status) status.textContent = 'Synthesizing your answers into a proposed positioning, audience, value proposition, personality, and differentiation.';
+      try {
+        const answers = Object.fromEntries(['project_name', 'idea', 'audience', 'promise', 'difference', 'feeling', 'tone'].map(key => [key, form.querySelector(`[name="${key}"]`)?.value?.trim() || '']));
+        const response = await api('/api/ai/brand-strategy', { method: 'POST', body: answers });
+        const strategy = response.strategy || {};
+        const fields = {
+          positioning: 'strategy_positioning',
+          primary_audience: 'strategy_audience',
+          value_proposition: 'strategy_value_proposition',
+          brand_personality: 'strategy_personality',
+          differentiation: 'strategy_differentiation'
+        };
+        Object.entries(fields).forEach(([key, name]) => {
+          const input = form.querySelector(`[name="${name}"]`);
+          if (input) input.value = String(strategy[key] || '');
+        });
+        questionFlow.hidden = true;
+        reviewPanel.hidden = false;
+        form.dataset.guidedStage = 'review';
+        if (status) status.textContent = 'Strategy ready to review. Edit any field before creating the brand kit.';
+        reviewPanel.querySelector('h3')?.setAttribute('tabindex', '-1');
+        reviewPanel.querySelector('h3')?.focus({ preventScroll: true });
+      } catch (error) {
+        if (status) status.textContent = error.message;
+      } finally {
+        if (button) setButtonLoading(button, false, '', prior);
+        // The final submit button is not used while strategy review is open.
+      }
+    });
+  });
+
   document.querySelectorAll('[data-toggle-password]').forEach(button => button.addEventListener('click', () => {
     const input = document.getElementById(button.dataset.togglePassword);
     if (!input) return;
@@ -611,7 +719,6 @@
     renderFinalPreview();
     initializeTypographyAndLogos();
 
-    editor.querySelector('#copy-positioning')?.addEventListener('input', event => { event.currentTarget.dataset.userEdited = 'true'; });
     blockList?.addEventListener('click', async event => {
       const upload = event.target.closest('[data-upload-asset], [data-upload-captions]');
       if (upload) {
@@ -659,12 +766,13 @@
       const task = button.dataset.task;
       const field = editor.querySelector(`[data-field="${target}"]`);
       const status = editor.querySelector(`[data-generation-status="${target}"]`);
-      const contextField = editor.querySelector(`[data-generation-context="${target}"]`);
-      const generationContext = contextField?.value.trim() || '';
       if (!field) return;
-      if (generationContext.length < 12) {
-        if (status) status.textContent = 'Add a little more context before generating.';
-        contextField?.focus();
+      const storyDraft = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.value.trim() || '';
+      const descriptionContext = editor.querySelector('[data-field="description"]')?.value.trim() || '';
+      const audienceContext = editor.querySelector('[data-field="audience"]')?.value.trim() || '';
+      if ([storyDraft, descriptionContext, audienceContext].join(' ').trim().length < 8) {
+        if (status) status.textContent = 'Add a brand description, audience, or story draft first.';
+        editor.querySelector('[data-field="description"]')?.focus();
         return;
       }
       const prior = button.textContent;
@@ -679,9 +787,9 @@
           brand_name: editor.querySelector('[data-field="brand_name"]').value,
           industry: editor.querySelector('[data-field="industry"]').value,
           audience: editor.querySelector('[data-field="audience"]').value,
-          positioning: editor.querySelector('#copy-positioning')?.value.trim() || description,
-          tone: editor.querySelector('#copy-tone')?.value.trim() || 'Clear, distinctive, human',
-          key_points: [generationContext, description, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : ''].filter(Boolean).join('\n').slice(0, 1500)
+          positioning: [description, audienceContext].filter(Boolean).join('\n'),
+          tone: [...editor.querySelectorAll('[data-copy-tone]:checked')].map(input => input.value).join(', ') || 'Conversational',
+          key_points: [storyDraft ? `Story draft: ${storyDraft}` : '', description, audienceContext, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : ''].filter(Boolean).join('\n').slice(0, 8000)
         }});
         field.value = result.copy;
         renderFinalPreview();
@@ -717,20 +825,36 @@
     }));
 
     const copyButton = editor.querySelector('[data-generate-copy]');
+    const storyApplyButton = editor.querySelector('[data-copy-to-story]');
+    editor.querySelectorAll('[data-copy-type]').forEach(input => input.addEventListener('change', () => {
+      if (storyApplyButton && editor.querySelector('[data-copy-result]')?.value.trim()) {
+        storyApplyButton.disabled = ![...editor.querySelectorAll('[data-copy-type]:checked')].some(option => option.value === 'Brand story');
+      }
+    }));
     copyButton?.addEventListener('click', async () => {
-      const status = editor.querySelector('[data-copy-status]'); const output = editor.querySelector('[data-copy-result]');
-      const prior = copyButton.textContent; setButtonLoading(copyButton, true, 'Writing…', prior); if (status) status.textContent = 'Working on a draft';
+      const status = editor.querySelector('[data-copy-status]');
+      const output = editor.querySelector('[data-copy-result]');
+      const storyDraft = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.value.trim() || '';
+      const selectedOutputs = [...editor.querySelectorAll('[data-copy-type]:checked')].map(input => input.value);
+      const toneOptions = [...editor.querySelectorAll('[data-copy-tone]:checked')].map(input => input.value);
+      if (!selectedOutputs.length) { if (status) status.textContent = 'Select at least one type of brand copy.'; return; }
+      if (!toneOptions.length) { if (status) status.textContent = 'Select at least one tone of voice.'; return; }
+      if (storyDraft.length < 12) { if (status) status.textContent = 'Add a little more to the story draft before generating copy.'; editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.focus(); return; }
+      const prior = copyButton.textContent;
+      setButtonLoading(copyButton, true, 'Writing…', prior);
+      if (status) status.textContent = 'Generating the selected copy from your story draft…';
       try {
+        const description = editor.querySelector('[data-field="description"]')?.value.trim() || '';
+        const audience = editor.querySelector('[data-field="audience"]')?.value.trim() || '';
         const result = await api('/api/ai/copy', { method: 'POST', body: {
-          task: editor.querySelector('#copy-task').value,
-          brand_name: editor.querySelector('[data-field="brand_name"]').value,
-          industry: editor.querySelector('[data-field="industry"]').value,
-          audience: editor.querySelector('[data-field="audience"]').value,
-          positioning: editor.querySelector('#copy-positioning').value,
-          tone: editor.querySelector('#copy-tone').value,
-          key_points: editor.querySelector('#copy-key-points').value
+          task: 'Brand writing package', brand_name: editor.querySelector('[data-field="brand_name"]').value,
+          industry: editor.querySelector('[data-field="industry"]').value, audience, positioning: description,
+          tone: toneOptions.join(', '), source_story_draft: storyDraft, selected_outputs: selectedOutputs, tone_options: toneOptions
         }});
-        output.value = result.copy; if (status) status.textContent = 'Draft generated. Review before use.';
+        output.value = result.copy;
+        if (status) status.textContent = 'Draft generated. Review and edit it before use.';
+        const applyButton = editor.querySelector('[data-copy-to-story]');
+        if (applyButton) applyButton.disabled = !selectedOutputs.includes('Brand story');
       } catch (error) { if (status) status.textContent = error.message; }
       finally { setButtonLoading(copyButton, false, '', prior); }
     });
@@ -739,11 +863,15 @@
       if (!copy) return;
       const story = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
       if (!story) return;
-      story.querySelector('[data-block-content]').value = copy;
+      const match = copy.match(/(?:^|\n)(?:#{1,3}\s*)?Brand story:?\s*\n([\s\S]*?)(?=\n(?:#{1,3}\s*)?(?:About us|Brand manifesto):?\s*\n|$)/i);
+      if (!match || !match[1].trim()) {
+        const status = editor.querySelector('[data-copy-status]');
+        if (status) status.textContent = 'No Brand story section was generated. Select Brand story and generate again.';
+        return;
+      }
+      story.querySelector('[data-block-content]').value = match[1].trim();
       renderFinalPreview();
       if (feedback) feedback.textContent = 'Story draft applied. Save changes to keep it.';
-      editor.querySelector('[data-editor-tab="messaging-story"]')?.click();
-      editor.querySelector('[data-messaging-tab="story"]')?.click();
       story.querySelector('[data-block-content]')?.focus({ preventScroll: true });
     });
     editor.querySelector('[data-copy-copy]')?.addEventListener('click', async event => {
@@ -804,30 +932,7 @@
       activateEditorTab(editorTabs[next], true);
     });
 
-    // Nested tabs keep core messaging and story editing within one combined brand section.
-    const messagingTabs = [...editor.querySelectorAll('[data-messaging-tab]')];
-    const messagingPanels = [...editor.querySelectorAll('[data-messaging-panel]')];
-    function activateMessagingTab(tab, focus = false) {
-      const selected = tab.dataset.messagingTab;
-      messagingTabs.forEach(item => {
-        const active = item === tab;
-        item.classList.toggle('active', active);
-        item.setAttribute('aria-selected', String(active));
-        item.tabIndex = active ? 0 : -1;
-      });
-      messagingPanels.forEach(panel => { panel.hidden = panel.dataset.messagingPanel !== selected; });
-      if (focus) tab.focus();
-    }
-    const initialMessagingTab = messagingTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || messagingTabs[0];
-    if (initialMessagingTab) activateMessagingTab(initialMessagingTab);
-    messagingTabs.forEach(tab => tab.addEventListener('click', () => activateMessagingTab(tab)));
-    editor.querySelector('[data-messaging-tabs]')?.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const current = messagingTabs.indexOf(document.activeElement);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? messagingTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + messagingTabs.length) % messagingTabs.length;
-      activateMessagingTab(messagingTabs[next], true);
-    });
+
   }
 
   const legalPage = document.querySelector('[data-legal-page]');
@@ -842,6 +947,17 @@
     const analysisStatus = legalPage.querySelector('[data-analysis-status]');
     const persistenceNote = legalPage.querySelector('[data-report-persistence-status]');
     const selectedKitId = analyzeButton?.dataset.brandKitId || '';
+    const frameworkChecks = [...legalPage.querySelectorAll('[data-analysis-standard]')];
+    function updateLegalSelectionState() {
+      const selected = frameworkChecks.filter(input => input.checked);
+      if (analyzeButton) analyzeButton.disabled = selected.length === 0;
+      frameworkChecks.forEach(input => {
+        const scope = legalPage.querySelector(`[data-analysis-scope="${input.value}"]`);
+        if (scope) scope.disabled = !input.checked;
+      });
+    }
+    frameworkChecks.forEach(input => input.addEventListener('change', updateLegalSelectionState));
+    updateLegalSelectionState();
 
     function addAnalysisList(parent, label, items) {
       if (!Array.isArray(items) || !items.length) return;
@@ -898,15 +1014,16 @@
       resultFindings.replaceChildren();
       setButtonLoading(analyzeButton, true, 'Analyzing brand…', prior);
       try {
-        const response = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: selectedKitId, standards: selectedStandards } });
+        const scopes = Object.fromEntries(selectedStandards.map(standard => [standard, legalPage.querySelector(`[data-analysis-scope="${standard}"]`)?.value || 'All areas']));
+        const response = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: selectedKitId, standards: selectedStandards, scopes } });
         renderLegalAnalysis(response.analysis || {});
         analysisStatus.textContent = 'Analysis complete.';
         resultPanel.focus?.({ preventScroll: true });
         if (persistenceNote) persistenceNote.textContent = response.persisted ? 'Report saved with this brand.' : 'Report generated, but could not be saved. Check workspace storage.';
       } catch (error) {
-        resultSummary.textContent = 'The analysis could not be completed. Check the Gemini configuration and try again.';
+        resultSummary.textContent = 'The analysis could not be completed. Check the analysis connection and try again.';
         analysisStatus.textContent = 'The analysis could not be completed.';
-      } finally { setButtonLoading(analyzeButton, false, '', prior); }
+      } finally { setButtonLoading(analyzeButton, false, '', prior); updateLegalSelectionState(); }
     });
   }
 

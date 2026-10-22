@@ -614,8 +614,14 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-editor-panel="components" hidden' in html
     assert 'data-editor-panel="culture" hidden' in html
     assert 'data-editor-panel="design-review" hidden' in html
-    assert 'data-messaging-tab="core"' in html and 'data-messaging-tab="story"' in html
-    assert 'data-messaging-panel="core"' in html and 'data-messaging-panel="story" hidden' in html
+    assert 'data-messaging-tab=' not in html and 'data-messaging-panel=' not in html
+    assert 'What are you writing?' in html
+    assert 'data-copy-type value="Brand story" checked' in html
+    assert 'data-copy-type value="About us" checked' in html
+    assert 'data-copy-type value="Brand manifesto" checked' in html
+    assert 'data-copy-tone value="Professional"' in html
+    assert 'data-copy-tone value="Conversational" checked' in html
+    assert 'data-copy-tone value="Bold"' in html
     assert 'data-kit-live-preview' in html
     assert "Sharing &amp; access" in html
     intro = html.split('<section class="editor-intro"', 1)[1].split('</section>', 1)[0]
@@ -632,8 +638,10 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-block-type="select"' not in html
     assert 'data-add-block' not in html
     assert "Find the words that stick" not in html
-    assert 'data-generation-context="tagline"' in html
-    assert 'data-generation-context="elevator_pitch"' in html
+    assert 'data-generation-context=' not in html
+    assert 'id="kit-tagline" class="tagline-output-field"' in html
+    assert 'id="kit-elevator-pitch" class="pitch-output-field"' in html
+    assert 'rows="5" maxlength="1000"' in html
     assert 'type="color"' in html
     assert 'data-typography-field="heading_font"' in html
     assert 'data-typography-field="body_font"' in html
@@ -660,15 +668,17 @@ def test_brand_story_does_not_require_an_asset_and_tabs_are_keyboard_enabled():
     editor = (root / "app/templates/kit_editor.html").read_text(encoding="utf-8")
     js = (root / "app/static/js/app.js").read_text(encoding="utf-8")
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
-    story_section = editor.split('<section id="messaging-subpanel-story"', 1)[1].split('</section>', 1)[0]
+    story_section = editor.split('<section id="brand-messaging-story"', 1)[1].split('<section id="brand-components"', 1)[0]
+    assert 'id="story-draft"' in story_section
     assert 'data-block-file' not in story_section
     assert 'data-block-url' not in story_section
     assert 'data-block-section-tab' in editor
     assert all(key in js for key in ("ArrowLeft", "ArrowRight", "Home", "End"))
-    assert '[data-editor-tab=\"messaging-story\"]' in js and '[data-messaging-tab=\"story\"]' in js
+    assert 'data-editor-tab' in js
+    assert '[data-messaging-tab=\"story\"]' not in js
     assert '.editor-tabs { top: 0; z-index: 12;' in css
     assert '.block-type-tabs { position: sticky;' in css
-    assert '.core-messaging-grid { grid-template-columns: 1fr; }' in css
+    assert '.core-messaging-grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; }' in css
     assert '.sharing-layout { align-items: stretch; }' in css
     assert '.sharing-controls, .share-preview-card { height: 100%; }' in css
 
@@ -733,8 +743,12 @@ def test_brand_kits_has_two_consistent_creation_pathways_and_no_repeated_create_
     assert html.count('action="/kits/new"') == 1
     assert html.count('action="/kits/guided"') == 1
     assert "Start from my brief" in html
-    assert "Build my starting direction" in html
-    assert "Gemini will shape it into a starting brand direction" in html
+    assert "Develop brand strategy" in html
+    assert "Create brand kit from strategy" in html
+    assert "Review your brand strategy" in html
+    assert "Positioning" in html and "Primary audience" in html and "Value proposition" in html
+    assert "Gemini will shape it" not in html
+    assert 'data-guided-step="0"' in html and 'data-guided-step="5"' in html
     assert 'data-guided-create' in html
     assert 'data-scroll-create' not in html
     assert 'class="app-topbar"' not in html
@@ -859,10 +873,11 @@ def test_legal_kit_uses_framework_checkboxes_without_review_stage_or_portal_prev
 def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkeypatch):
     from app import main as main_module
     captured = {}
-    def fake_analysis(kit, entries, standards):
+    def fake_analysis(kit, entries, standards, scopes=None):
         captured["brand"] = kit["brand_name"]
         captured["entries"] = entries
         captured["standards"] = standards
+        captured["scopes"] = scopes
         return {"summary": "Review the records for Northline Outdoors.", "standards": [
             {"standard": standard, "materials_assessment": "No relevant material identified",
              "evidence_identified": [], "gaps_to_check": ["No relevant policy supplied"],
@@ -880,6 +895,7 @@ def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkey
     assert response.json()["brand_name"] == "Northline Outdoors"
     assert captured["brand"] == "Northline Outdoors"
     assert captured["standards"] == ["GDPR", "ISO 27001"]
+    assert captured["scopes"] == {"GDPR": "All areas", "ISO 27001": "All areas"}
     assert all(str(entry.get("brand_kit_id")) == "starter-kit-002" for entry in captured["entries"])
 
 
@@ -895,7 +911,7 @@ def test_brand_alignment_report_is_saved_without_review_stage_workflow(monkeypat
     original_report = deepcopy(kit.get("legal_review_report"))
     original_status = deepcopy(kit.get("legal_review_status"))
     original_history = deepcopy(kit.get("legal_review_history"))
-    monkeypatch.setattr(main_module, "generate_legal_analysis", lambda _kit, _entries, standards: {
+    monkeypatch.setattr(main_module, "generate_legal_analysis", lambda _kit, _entries, standards, scopes=None: {
         "summary": "The selected brand content needs review against the selected themes.",
         "standards": [{
             "standard": standard,
@@ -916,6 +932,7 @@ def test_brand_alignment_report_is_saved_without_review_stage_workflow(monkeypat
         assert analyzed.status_code == 200
         assert analyzed.json()["persisted"] is True
         assert kit["legal_review_report"]["frameworks"] == ["GDPR", "ISO 27001"]
+        assert kit["legal_review_report"]["scopes"] == {"GDPR": "All areas", "ISO 27001": "All areas"}
         assert "review_status" not in analyzed.json()
         assert "review_history" not in analyzed.json()
         refreshed = client.get("/legal?brand_kit_id=starter-kit-002").text
@@ -1027,7 +1044,9 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
         assert target in editor_tabs
     panels = re.findall(r'<section id="(brand-definition|brand-messaging-story|brand-components|culture|design-review)".*?>', html)
     assert panels == ['brand-definition', 'brand-messaging-story', 'brand-components', 'culture', 'design-review']
-    assert 'id="messaging-subpanel-story" class="editor-subpanel" role="tabpanel" aria-labelledby="messaging-subtab-story" data-messaging-panel="story" hidden' in html
+    assert 'id="messaging-subpanel-story"' not in html
+    assert 'data-messaging-tab=' not in html
+    assert 'data-copy-type' in html and 'data-copy-tone' in html
     assert '<h2 id="design-review-heading">Design Review</h2>' in html
 
 
@@ -1097,7 +1116,7 @@ def test_editor_has_pure_underline_tabs_consistent_actions_and_linear_story_layo
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
     assert '.editor-page .editor-tabs [role="tab"][aria-selected="true"]' in css
     assert 'border-bottom: 2px solid var(--brand)' in css
-    assert '.editor-subpanel .story-editor-layout .ai-copy-panel {' in css
+    assert '.story-editor-layout {' in css
     assert 'grid-template-columns: minmax(0, 1fr);' in css
     assert '.button-danger {' in css
 
@@ -1110,3 +1129,113 @@ def test_button_primary_uses_same_fill_and_foreground_in_light_and_dark_modes():
     assert "color: #f8f9fc;" in css
     assert "html[data-theme=\"dark\"] .button-primary,\nhtml[data-theme=\"dark\"] .button-primary:hover {\n  border-color: #30364a;\n  background: #30364a;\n  color: #f8f9fc;" in css
     assert ".button-danger {" in css
+
+
+def test_guided_strategy_preview_returns_editable_strategy(monkeypatch):
+    from app import main as main_module
+    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "unit-test-key")
+    monkeypatch.setattr(main_module, "generate_brand_strategy", lambda answers: {
+        "positioning": "A useful homeware brand for small-space living.",
+        "primary_audience": "Renters and first-time homeowners in compact homes.",
+        "value_proposition": "Make smaller spaces easier to use and enjoy.",
+        "brand_personality": "Grounded, warm, resourceful.",
+        "differentiation": "Practical design focused on the realities of compact living.",
+    })
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/kits")
+    csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+    response = client.post("/api/ai/brand-strategy", headers={"X-CSRF-Token": csrf}, json={"idea": "Useful homeware for compact homes"})
+    assert response.status_code == 200
+    assert response.json()["strategy"]["positioning"].startswith("A useful homeware brand")
+    assert "differentiation" in response.json()["strategy"]
+
+
+def test_legal_assessment_rejects_no_frameworks_and_invalid_scope(monkeypatch):
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/legal?brand_kit_id=starter-kit-002")
+    csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+    headers = {"X-CSRF-Token": csrf}
+    empty = client.post("/api/legal/analyze", headers=headers, json={"brand_kit_id": "starter-kit-002", "standards": []})
+    assert empty.status_code == 422
+    invalid = client.post("/api/legal/analyze", headers=headers, json={"brand_kit_id": "starter-kit-002", "standards": ["GDPR"], "scopes": {"GDPR": "Not a real scope"}})
+    assert invalid.status_code == 422
+
+
+def test_legal_prompt_includes_selected_scope():
+    from app.main import build_legal_analysis_prompt
+    prompt = build_legal_analysis_prompt({"brand_name": "Scope Test", "blocks": []}, [], ["GDPR"], {"GDPR": "Privacy notice and consent"})
+    assert '"Privacy notice and consent"' in prompt
+    assert "do not assess unrelated areas" in prompt
+
+
+def test_guided_creation_uses_approved_strategy_as_authoritative(monkeypatch):
+    from app import main as main_module
+    if main_module.store.supabase_enabled:
+        return
+    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "unit-test-key")
+    captured = {}
+    direction = {
+        "project_name": "Small Place", "brand_name": "Small Place", "industry": "Homeware",
+        "audience": "Generated audience", "description": "Generated generic description.",
+        "tagline": "Room for living", "elevator_pitch": "Useful homeware for compact spaces.",
+        "brand_story": "A story about useful homeware.", "color_direction": "Warm neutral palette.",
+        "typography_direction": "Readable sans serif with a calm display face.", "visual_direction": "Natural materials and honest scale.",
+    }
+    def fake_direction(answers):
+        captured.update(answers)
+        return direction
+    monkeypatch.setattr(main_module, "generate_guided_brand_direction", fake_direction)
+    original_kits = list(main_module.store.kits)
+    client = TestClient(app)
+    try:
+        _sign_in(client, "client", "FormaClient!2026")
+        page = client.get("/kits")
+        csrf = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
+        response = client.post("/kits/guided", data={
+            "csrf_token": csrf, "project_name": "Small Place", "idea": "Useful homeware for compact homes",
+            "audience": "People in compact apartments", "promise": "Make small homes easier to use",
+            "difference": "Thoughtful practical design", "feeling": "grounded", "tone": "conversational",
+            "strategy_positioning": "Reviewed positioning for compact urban homes.",
+            "strategy_audience": "Renters and first-time homeowners in compact homes.",
+            "strategy_value_proposition": "Make smaller spaces easier to use and enjoy.",
+            "strategy_personality": "Grounded, warm, resourceful.",
+            "strategy_differentiation": "Practical design for compact living.",
+        }, follow_redirects=False)
+        assert response.status_code == 303
+        kit_id = response.headers["location"].rsplit("/", 1)[1]
+        kit = main_module.store.get_kit_by_id(kit_id)
+        assert kit["description"] == "Reviewed positioning for compact urban homes."
+        assert kit["audience"] == "Renters and first-time homeowners in compact homes."
+        assert captured["strategy_value_proposition"] == "Make smaller spaces easier to use and enjoy."
+        assert captured["strategy_differentiation"] == "Practical design for compact living."
+    finally:
+        main_module.store.kits[:] = original_kits
+
+
+def test_legal_frameworks_and_scopes_start_selected_with_all_areas():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    html = client.get("/legal?brand_kit_id=starter-kit-002").text
+    for standard in ("GDPR", "ISO 27001", "SOC 2 Type II"):
+        assert f'data-analysis-standard value="{standard}" checked' in html
+        assert f'data-analysis-scope="{standard}"' in html
+    assert html.count('value="All areas" selected') == 3
+
+
+def test_brand_writing_package_rejects_empty_selections_and_short_draft(monkeypatch):
+    from app import main as main_module
+    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "unit-test-key")
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    page = client.get("/kits/starter-kit-002")
+    csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+    headers = {"X-CSRF-Token": csrf}
+    base = {"task": "Brand writing package", "source_story_draft": "A useful story about a thoughtful, practical brand.", "selected_outputs": ["Brand story"], "tone_options": ["Conversational"]}
+    no_outputs = client.post("/api/ai/copy", headers=headers, json={**base, "selected_outputs": []})
+    no_tones = client.post("/api/ai/copy", headers=headers, json={**base, "tone_options": []})
+    short_story = client.post("/api/ai/copy", headers=headers, json={**base, "source_story_draft": "Too short"})
+    assert no_outputs.status_code == 422
+    assert no_tones.status_code == 422
+    assert short_story.status_code == 422

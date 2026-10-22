@@ -912,3 +912,82 @@ html[data-theme="dark"] .button-primary:hover {
   .editor-page .editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
   .editor-page .editor-actions .button { width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 }
+
+
+/* Brand Messaging & Story: one linear, spacious writing surface. */
+.core-messaging-grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.core-messaging-field { height: auto; padding: 1.2rem; }
+.messaging-field-title { min-height: 0; margin-bottom: .85rem; }
+.core-messaging-field label[for] { margin-top: .25rem; }
+.core-messaging-field textarea { width: 100%; resize: vertical; line-height: 1.65; }
+.core-messaging-field .tagline-output-field { min-height: 4.8rem; }
+.core-messaging-field .pitch-output-field { min-height: 9.5rem; }
+.messaging-field-actions { min-height: 0; margin-top: .9rem; padding-top: 0; }
+.story-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.story-block-editor, .story-editor-layout .ai-copy-panel { height: auto; }
+.story-block-editor textarea { min-height: 20rem; width: 100%; resize: vertical; line-height: 1.7; }
+.ai-copy-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.ai-copy-form, .ai-copy-result { padding: clamp(1rem, 2vw, 1.4rem); }
+.ai-copy-form h3 { margin-bottom: .2rem; }
+.copy-option-group { min-width: 0; margin: 0; padding: .8rem 0 0; border: 0; border-top: 1px solid var(--line); }
+.copy-option-group legend { padding: 0; font-size: .86rem; font-weight: 750; }
+.copy-option-group .field-help { margin: .15rem 0 .55rem; }
+.copy-option-list { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .5rem; }
+.copy-option-list label { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.65rem; margin: 0; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--surface-raised); cursor: pointer; }
+.copy-option-list input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--brand); }
+.copy-option-list span { font-size: .82rem; font-weight: 650; }
+.copy-option-list label:has(input:checked) { border-color: var(--brand); }
+.ai-copy-result textarea { min-height: 22rem; width: 100%; border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; resize: vertical; line-height: 1.7; }
+.result-heading { align-items: flex-start; }
+.result-actions { justify-content: flex-start; }
+.result-actions .button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Guided Brand Design: one question at a time, followed by an editable strategy review. */
+.pathway-guided .guided-intro { max-width: 54rem; margin: 0 auto 1.4rem; }
+.guided-intro h2 { margin: 0 0 .45rem; font-size: 1.35rem; }
+.guided-intro p { margin: 0; color: var(--muted); font-size: .87rem; line-height: 1.55; }
+.pathway-guided .guided-strategy-form { display: block; max-width: none; }
+.guided-question-flow, .guided-strategy-review { width: 100%; max-width: 54rem; margin: 0 auto; }
+.guided-progress { display: grid; gap: .55rem; margin-bottom: 1.5rem; }
+.guided-progress > div:first-child { display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.guided-progress-track { height: .28rem; overflow: hidden; border-radius: 999px; background: var(--line); }
+.guided-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--brand); transition: width .18s ease; }
+.guided-question-step { min-height: 17rem; padding: clamp(1rem, 3vw, 2rem) 0; }
+.guided-question-step h3 { margin: 0 0 .6rem; font-size: clamp(1.35rem, 2.4vw, 1.8rem); }
+.guided-question-step p { max-width: 40rem; margin-bottom: 1.2rem; color: var(--muted); line-height: 1.6; }
+.guided-question-step textarea, .guided-question-step select { display: block; width: 100%; max-width: none; min-height: 3rem; }
+.guided-question-step textarea { min-height: 8rem; resize: vertical; line-height: 1.65; }
+.guided-step-actions, .guided-final-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.guided-step-actions [data-guided-back] { margin-right: auto; }
+.guided-review-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: .8rem; margin-bottom: 1.2rem; }
+.guided-review-heading h3 { margin: 0 0 .35rem; font-size: 1.35rem; }
+.guided-review-heading p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.guided-review-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.guided-review-fields > div { display: grid; gap: .35rem; }
+.guided-review-fields label { font-size: .8rem; font-weight: 700; }
+.guided-review-fields textarea { width: 100%; max-width: none; resize: vertical; line-height: 1.6; }
+.guided-status { min-height: 1.3rem; margin: .8rem auto 0; max-width: 54rem; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.guided-final-actions .button:last-child { margin-left: auto; }
+
+/* Framework scope controls are part of each selected framework's assessment card. */
+.legal-framework-options-inline { align-items: stretch; }
+.legal-framework-card { display: grid; align-content: start; gap: .8rem; min-width: 0; padding: .9rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); }
+.legal-framework-card .legal-framework-option { min-height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.legal-framework-scope { display: grid; align-content: start; gap: .3rem; margin-top: .1rem; }
+.legal-framework-scope label { font-size: .75rem; font-weight: 700; }
+.legal-framework-scope select { width: 100%; min-width: 0; min-height: 2.6rem; font-size: .78rem; }
+.legal-framework-scope select:disabled { opacity: .55; }
+.legal-scope-help { margin: .7rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+@media (max-width: 900px) {
+  .legal-framework-options { grid-template-columns: minmax(0, 1fr); }
+  .guided-question-step { min-height: 13rem; }
+}
+@media (max-width: 650px) {
+  .guided-progress > div:first-child { align-items: flex-start; }
+  .guided-step-actions, .guided-final-actions { align-items: stretch; }
+  .guided-step-actions .button, .guided-final-actions .button { flex: 1 1 auto; }
+  .guided-final-actions .button:last-child { margin-left: 0; }
+  .copy-option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .copy-option-list label { justify-content: flex-start; }
+  .ai-copy-result textarea { min-height: 18rem; }
+}

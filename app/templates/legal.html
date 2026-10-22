@@ -36,10 +36,15 @@
               <legend>Assess against</legend>
               <div class="legal-framework-options legal-framework-options-inline">
                 {% set descriptions = {'GDPR':'Privacy, consent and personal data', 'ISO 27001':'Information security management', 'SOC 2 Type II':'Security controls and operating claims'} %}
+                {% set scope_options = {'GDPR':['All areas','Privacy notice and consent','Personal data handling','Retention and deletion','Data subject rights'], 'ISO 27001':['All areas','Security claims','Policies and governance','Risk and controls','Incident response'], 'SOC 2 Type II':['All areas','Security','Availability','Confidentiality','Processing integrity','Privacy']} %}
                 {% for standard in legal_display_standards %}
-                  <label class="legal-framework-option"><input type="checkbox" data-analysis-standard value="{{ standard }}" {{ 'checked' if standard in legal_selected_standards else '' }}><span><strong>{{ standard }}</strong><small>{{ descriptions[standard] }}</small></span></label>
+                  <div class="legal-framework-card">
+                    <label class="legal-framework-option"><input type="checkbox" data-analysis-standard value="{{ standard }}" checked><span><strong>{{ standard }}</strong><small>{{ descriptions[standard] }}</small></span></label>
+                    <div class="legal-framework-scope"><label for="scope-{{ loop.index }}">Assessment scope</label><select id="scope-{{ loop.index }}" data-analysis-scope="{{ standard }}" aria-label="{{ standard }} assessment scope">{% for scope in scope_options[standard] %}<option value="{{ scope }}" {{ 'selected' if scope == 'All areas' else '' }}>{{ scope }}</option>{% endfor %}</select></div>
+                  </div>
                 {% endfor %}
               </div>
+              <p class="legal-scope-help">All frameworks start selected, with each scope set to all areas. Narrow the assessment as needed.</p>
             </fieldset>
             <div class="legal-analysis-actions"><button type="button" class="button button-primary" data-analyze-compliance data-brand-kit-id="{{ selected_kit.id }}">Analyze brand content</button><p data-analysis-status role="status" aria-live="polite"></p></div>
           </section>
