@@ -392,46 +392,89 @@
       if (!preview) return;
       const value = selector => editor.querySelector(selector)?.value?.trim() || '';
       const setText = (selector, text) => { const node = preview.querySelector(selector); if (node) { node.textContent = text; node.hidden = !text; } };
-      setText('[data-preview-brand]', value('[data-field="brand_name"]') || value('[data-field="name"]') || 'Your brand');
+      const brandName = value('[data-field="brand_name"]') || value('[data-field="name"]') || 'Your brand';
+      setText('[data-preview-brand]', brandName);
       setText('[data-preview-description]', value('[data-field="description"]'));
       setText('[data-preview-tagline]', value('[data-field="tagline"]'));
       setText('[data-preview-pitch]', value('[data-field="elevator_pitch"]'));
+      setText('[data-preview-industry]', value('[data-field="industry"]'));
+      setText('[data-preview-audience]', value('[data-field="audience"]'));
+      const categoryWrap = preview.querySelector('[data-preview-category-wrap]');
+      const audienceWrap = preview.querySelector('[data-preview-audience-wrap]');
+      if (categoryWrap) categoryWrap.hidden = !value('[data-field="industry"]');
+      if (audienceWrap) audienceWrap.hidden = !value('[data-field="audience"]');
+      const shareBrand = editor.querySelector('[data-share-card-brand]'); if (shareBrand) shareBrand.textContent = brandName;
+      const shareDescription = editor.querySelector('[data-share-card-description]'); if (shareDescription) shareDescription.textContent = value('[data-field="description"]') || 'The identity, messaging, and resources for this brand.';
+
       const palette = preview.querySelector('[data-preview-palette]');
+      let paletteCount = 0;
       if (palette) {
         palette.replaceChildren();
         const colorBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Colors');
         const rows = [...(colorBlock?.querySelectorAll('[data-color-row]') || [])];
         rows.forEach(row => {
-          const hex = row.querySelector('[data-color-hex]')?.value.trim() || '#FFFFFF';
+          const hex = row.querySelector('[data-color-hex]')?.value.trim() || '';
           const name = row.querySelector('[data-color-name]')?.value.trim() || 'Color';
           if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
           const item = document.createElement('div'); const chip = document.createElement('span'); chip.style.backgroundColor = hex; chip.setAttribute('aria-hidden', 'true');
           const label = document.createElement('strong'); label.textContent = name; const code = document.createElement('code'); code.textContent = hex.toUpperCase();
-          item.append(chip, label, code); palette.append(item);
+          item.append(chip, label, code); palette.append(item); paletteCount += 1;
         });
       }
+      const paletteSection = preview.querySelector('[data-preview-palette-section]');
+      if (paletteSection) paletteSection.hidden = paletteCount === 0;
+
       const blocks = preview.querySelector('[data-preview-blocks]');
+      let populatedBlockCount = 0;
       if (blocks) {
         blocks.replaceChildren();
-        [...editor.querySelectorAll('[data-block]')].filter(block => !['3D Models', 'Collaterals'].includes(block.dataset.blockType)).forEach(block => {
-          const card = document.createElement('article'); const title = document.createElement('strong');
-          title.textContent = block.querySelector('[data-block-title]')?.value?.trim() || block.querySelector('.block-card-heading h3')?.textContent?.trim() || block.dataset.blockType;
-          const content = document.createElement('p');
-          if (block.dataset.blockType === 'Colors') content.textContent = block.querySelector('[data-block-content]')?.value || 'Color palette';
-          else if (block.dataset.blockType === 'Typography') {
-            const values = ['heading_font', 'body_font', 'accent_font'].map(key => block.querySelector(`[data-typography-field="${key}"]`)?.value.trim()).filter(Boolean);
-            content.textContent = values.length ? `Typefaces: ${values.join(' · ')}. ${block.querySelector('[data-block-content]')?.value || ''}` : (block.querySelector('[data-block-content]')?.value || 'Type system');
-          } else if (block.dataset.blockType === 'Logos') content.textContent = block.querySelector('[data-block-content]')?.value || block.querySelector('[data-logo-brief]')?.value || 'Logo direction to refine';
-          else {
-            const styleBits = ['photography', 'lighting', 'texture'].map(key => block.querySelector(`[data-visual-field="${key}"]`)?.value.trim()).filter(Boolean);
-            const motionBits = ['pace', 'editing'].map(key => block.querySelector(`[data-motion-field="${key}"]`)?.value.trim()).filter(Boolean);
-            const iconBits = ['form', 'density'].map(key => block.querySelector(`[data-icon-field="${key}"]`)?.value.trim()).filter(Boolean);
-            const details = styleBits.length ? `Visual style: ${styleBits.join(' · ')}. ` : motionBits.length ? `Motion: ${motionBits.join(' · ')}. ` : iconBits.length ? `Icon system: ${iconBits.join(' · ')}. ` : '';
-            content.textContent = details + (block.querySelector('[data-block-content]')?.value || '');
+        [...editor.querySelectorAll('[data-block]')].filter(block => !['3D Models', 'Collaterals', 'Brand Story', 'Colors'].includes(block.dataset.blockType)).forEach(block => {
+          const type = block.dataset.blockType;
+          const titleText = block.querySelector('[data-block-title]')?.value?.trim() || block.querySelector('.block-card-heading h3')?.textContent?.trim() || type;
+          const details = [];
+          const content = block.querySelector('[data-block-content]')?.value?.trim() || '';
+          if (type === 'Typography') {
+            [['Heading', 'heading_font'], ['Body', 'body_font'], ['Accent', 'accent_font']].forEach(([label, key]) => { const text = block.querySelector(`[data-typography-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
+          } else if (type === 'Logos') {
+            const direction = block.querySelector('[data-logo-direction]')?.value || '';
+            const brief = block.querySelector('[data-logo-brief]')?.value.trim() || '';
+            if (direction && direction !== 'explore') details.push(`Direction: ${direction}`);
+            if (brief) details.push(brief);
+          } else if (type === 'Visuals') {
+            [['Photography', 'photography'], ['Lighting', 'lighting'], ['Texture', 'texture']].forEach(([label, key]) => { const text = block.querySelector(`[data-visual-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
+          } else if (type === 'Videos') {
+            [['Pace', 'pace'], ['Editing', 'editing']].forEach(([label, key]) => { const text = block.querySelector(`[data-motion-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
+          } else if (type === 'Icons') {
+            [['Form', 'form'], ['Density', 'density']].forEach(([label, key]) => { const text = block.querySelector(`[data-icon-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
           }
-          card.append(title, content); blocks.append(card);
+          if (content) details.push(content);
+          const url = block.querySelector('[data-block-url]')?.value.trim() || '';
+          if (url) details.push(`Reference: ${url}`);
+          if (!details.length) return;
+          const card = document.createElement('article'); card.dataset.previewType = type;
+          const title = document.createElement('strong'); title.textContent = titleText;
+          const paragraph = document.createElement('p'); paragraph.textContent = details.join(' · ');
+          card.append(title, paragraph); blocks.append(card); populatedBlockCount += 1;
         });
       }
+      const componentsSection = preview.querySelector('[data-preview-components-section]');
+      if (componentsSection) componentsSection.hidden = populatedBlockCount === 0;
+
+      const storyBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
+      const storyValue = storyBlock?.querySelector('[data-block-content]')?.value.trim() || '';
+      setText('[data-preview-story]', storyValue);
+      const storySection = preview.querySelector('[data-preview-story-section]');
+      if (storySection) storySection.hidden = !storyValue;
+
+      const cultureValues = value('#culture-values');
+      const cultureMarket = value('#culture-market');
+      const cultureResults = editor.querySelector('[data-culture-results]');
+      const culturePlaceholder = cultureResults?.querySelector('.culture-placeholder');
+      const generatedCulture = !culturePlaceholder ? cultureResults?.innerText?.trim() || '' : '';
+      const cultureSummary = [cultureMarket ? `Market: ${cultureMarket}` : '', cultureValues ? `Cultural territories: ${cultureValues}` : '', generatedCulture].filter(Boolean).join('\n\n');
+      setText('[data-preview-culture]', cultureSummary);
+      const cultureSection = preview.querySelector('[data-preview-culture-section]');
+      if (cultureSection) cultureSection.hidden = !cultureSummary;
     }
     renderFinalPreview();
 
@@ -595,23 +638,33 @@
         if (response.interpretation) { const interpretation = document.createElement('p'); interpretation.className = 'culture-result'; interpretation.style.whiteSpace = 'pre-wrap'; interpretation.textContent = response.interpretation; results.append(interpretation); }
         const note = document.createElement('p'); note.className = 'culture-disclaimer'; note.textContent = response.note || 'Aggregate affinity patterns are not the preferences of every person in an audience.'; results.append(note);
       } catch (error) { results.replaceChildren(); const message = document.createElement('p'); message.textContent = error.message; results.append(message); }
-      finally { setButtonLoading(cultureButton, false, '', prior); }
+      finally { renderFinalPreview(); setButtonLoading(cultureButton, false, '', prior); }
     });
 
-    // The active tab follows the section currently being read, not only the last tab clicked.
-    const tabLinks = [...editor.querySelectorAll('[data-editor-tabs] a')];
-    const targets = tabLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
-    if ('IntersectionObserver' in window && targets.length) {
-      const observer = new IntersectionObserver(entries => {
-        const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (!visible) return;
-        tabLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
-      }, { rootMargin: '-22% 0px -62% 0px', threshold: [0, .2, .5] });
-      targets.forEach(target => observer.observe(target));
+    // Section tabs switch panels in place; they do not scroll the user through one long page.
+    const editorTabs = [...editor.querySelectorAll('[data-editor-tab]')];
+    const editorPanels = [...editor.querySelectorAll('[data-editor-panel]')];
+    function activateEditorTab(tab, focus = false) {
+      const selected = tab.dataset.editorTab;
+      editorTabs.forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      editorPanels.forEach(panel => { panel.hidden = panel.dataset.editorPanel !== selected; });
+      if (focus) tab.focus();
     }
-    tabLinks.forEach(link => link.addEventListener('click', () => {
-      tabLinks.forEach(other => other.classList.toggle('active', other === link));
-    }));
+    const initialEditorTab = editorTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || editorTabs[0];
+    if (initialEditorTab) activateEditorTab(initialEditorTab);
+    editorTabs.forEach(tab => tab.addEventListener('click', () => activateEditorTab(tab)));
+    editor.querySelector('[data-editor-tabs]')?.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = editorTabs.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? editorTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + editorTabs.length) % editorTabs.length;
+      activateEditorTab(editorTabs[next], true);
+    });
   }
 
   const legalPage = document.querySelector('[data-legal-page]');
@@ -625,20 +678,7 @@
     const resultFindings = legalPage.querySelector('[data-analysis-findings]');
     const analysisStatus = legalPage.querySelector('[data-analysis-status]');
     const persistenceNote = legalPage.querySelector('[data-report-persistence-status]');
-    const reviewWorkflow = legalPage.querySelector('[data-report-workflow]');
-    const reviewStatus = legalPage.querySelector('[data-review-status]');
-    const reviewStatusPill = legalPage.querySelector('[data-review-status-pill]');
-    const reviewHistory = legalPage.querySelector('[data-review-history]');
-    const reviewHistoryEmpty = legalPage.querySelector('[data-review-history-empty]');
-    const reviewFeedback = legalPage.querySelector('[data-review-update-feedback]');
-    const reviewForm = legalPage.querySelector('[data-report-review-form]');
-    const reviewSaveButton = legalPage.querySelector('[data-save-review-stage]');
-    const reviewNote = legalPage.querySelector('#legal-review-note');
     const selectedKitId = analyzeButton?.dataset.brandKitId || '';
-    const reviewStageLabels = {
-      not_analyzed: 'Not analyzed', analysis_ready: 'Report ready',
-      in_review: 'In review', changes_needed: 'Changes needed', reviewed: 'Reviewed'
-    };
 
     function addAnalysisList(parent, label, items) {
       if (!Array.isArray(items) || !items.length) return;
@@ -650,7 +690,7 @@
     }
     function renderLegalAnalysis(analysis) {
       resultFindings.replaceChildren();
-      resultSummary.textContent = String(analysis?.summary || 'Review the brand-specific alignment observations and recommendations below.');
+      resultSummary.textContent = String(analysis?.summary || 'Review the brand-content alignment observations and recommendations below.');
       if (analysis?.analysis_text) {
         const text = document.createElement('p'); text.className = 'analysis-fallback-text'; text.style.whiteSpace = 'pre-wrap'; text.textContent = analysis.analysis_text; resultFindings.append(text); return;
       }
@@ -670,34 +710,7 @@
         const empty = document.createElement('p'); empty.textContent = 'No structured findings were returned. Run the analysis again.'; resultFindings.append(empty);
       }
     }
-    function renderReviewHistory(history) {
-      if (!reviewHistory) return;
-      reviewHistory.replaceChildren();
-      (Array.isArray(history) ? [...history].reverse() : []).forEach(event => {
-        const item = document.createElement('li');
-        const top = document.createElement('div'); top.className = 'legal-history-topline';
-        const label = document.createElement('strong'); label.textContent = reviewStageLabels[event.status] || String(event.status || 'Updated');
-        const time = document.createElement('time'); time.dateTime = String(event.changed_at || '');
-        const date = new Date(event.changed_at || ''); time.textContent = Number.isNaN(date.getTime()) ? String(event.changed_at || '') : `${date.toLocaleString()} `;
-        top.append(label, time); item.append(top);
-        if (event.changed_by) { const who = document.createElement('p'); who.textContent = `Changed by ${event.changed_by}`; item.append(who); }
-        if (event.note) { const note = document.createElement('p'); note.textContent = String(event.note); item.append(note); }
-        reviewHistory.append(item);
-      });
-      if (reviewHistoryEmpty) reviewHistoryEmpty.hidden = reviewHistory.children.length > 0;
-    }
-    function setReviewStatus(status) {
-      if (reviewStatus && reviewStageLabels[status]) reviewStatus.value = status;
-      if (reviewStatusPill) reviewStatusPill.textContent = reviewStageLabels[status] || 'Not reviewed';
-    }
-    function setReportPersistence(persisted, message = '') {
-      if (persistenceNote) persistenceNote.textContent = message;
-      if (reviewSaveButton) reviewSaveButton.disabled = !persisted;
-      if (reviewStatus) reviewStatus.disabled = !persisted;
-      if (reviewNote) reviewNote.disabled = !persisted;
-    }
 
-    // Restore the saved report on page load so it remains a durable brand-level report.
     const savedReportNode = legalPage.querySelector('[data-saved-legal-report]');
     if (savedReportNode) {
       try {
@@ -705,8 +718,7 @@
         if (savedReport?.analysis) {
           renderLegalAnalysis(savedReport.analysis);
           resultPanel.hidden = false;
-          if (reviewWorkflow) reviewWorkflow.hidden = false;
-          setReportPersistence(true, 'Saved with this brand.');
+          if (persistenceNote) persistenceNote.textContent = 'Saved with this brand.';
         }
       } catch (_) {
         // Invalid saved JSON should not prevent the rest of Legal Kit from working.
@@ -727,35 +739,11 @@
         renderLegalAnalysis(response.analysis || {});
         analysisStatus.textContent = 'Analysis complete.';
         resultPanel.focus?.({ preventScroll: true });
-        if (reviewWorkflow) reviewWorkflow.hidden = false;
-        setReviewStatus(response.review_status || 'analysis_ready');
-        renderReviewHistory(response.review_history || []);
-        setReportPersistence(Boolean(response.persisted), response.persistence_message || 'Report generated.');
+        if (persistenceNote) persistenceNote.textContent = response.persisted ? 'Report saved with this brand.' : 'Report generated, but could not be saved. Check workspace storage.';
       } catch (error) {
         resultSummary.textContent = 'The analysis could not be completed. Check the Gemini configuration and try again.';
         analysisStatus.textContent = 'The analysis could not be completed.';
       } finally { setButtonLoading(analyzeButton, false, '', prior); }
-    });
-
-    reviewForm?.addEventListener('submit', async event => {
-      event.preventDefault();
-      const prior = reviewSaveButton?.textContent || 'Save review update';
-      if (reviewFeedback) reviewFeedback.textContent = '';
-      if (reviewSaveButton) setButtonLoading(reviewSaveButton, true, 'Saving…', prior);
-      try {
-        const response = await api('/api/legal/review', { method: 'PUT', body: {
-          brand_kit_id: selectedKitId,
-          status: reviewStatus?.value || 'analysis_ready',
-          note: reviewNote?.value.trim() || ''
-        }});
-        setReviewStatus(response.status);
-        renderReviewHistory(response.history || []);
-        if (reviewFeedback) reviewFeedback.textContent = 'Review update saved.';
-        if (reviewNote) reviewNote.value = '';
-        setReportPersistence(true, 'Review history saved with this brand.');
-      } catch (_) {
-        if (reviewFeedback) reviewFeedback.textContent = 'The update could not be saved. Check workspace storage and apply the brand review report migration.';
-      } finally { if (reviewSaveButton) setButtonLoading(reviewSaveButton, false, '', prior); }
     });
   }
 

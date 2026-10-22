@@ -558,3 +558,18 @@ html[data-theme="dark"] .status-live { background: #243b3b; color: #a8dfc8; }
 .review-sharing-section .final-brand-preview { min-width: 0; }
 @media (max-width: 900px) { .review-sharing-layout { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 650px) { .brand-kits-page .kit-card-footer .edit-kit-button, .brand-kits-page .kit-card-footer .compliance-button { min-height: 2.7rem; } .review-summary-heading { align-items: flex-start; } }
+
+
+/* Section tabs show one editor panel at a time; navigation never scrolls through hidden sections. */
+.editor-tabs { display: flex; flex-wrap: nowrap; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+.editor-tabs [role="tab"] { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 2.7rem; padding: .65rem .85rem .8rem; border: 0; border-bottom: .15rem solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: .82rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.editor-tabs [role="tab"].active, .editor-tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--brand); color: var(--brand); }
+.editor-section[hidden] { display: none !important; }
+.editor-section:not([hidden]) { margin-top: 0; padding-top: 0; border-top: 0; }
+.design-review-meta { display: flex; flex-wrap: wrap; gap: .65rem 1.5rem; margin: 1rem 0 0; }
+.design-review-meta > div { min-width: 0; }
+.design-review-meta dt { color: var(--muted); font-size: .72rem; font-weight: 700; }
+.design-review-meta dd { margin: .18rem 0 0; font-size: .87rem; overflow-wrap: anywhere; }
+.design-review-story, .design-review-culture { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .86rem; line-height: 1.65; }
+.final-preview-sections > section[hidden] { display: none !important; }
+@media (max-width: 650px) { .editor-tabs [role="tab"] { padding-inline: .65rem; font-size: .75rem; } }

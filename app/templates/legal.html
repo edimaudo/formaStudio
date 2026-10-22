@@ -17,8 +17,7 @@
     <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
     <div class="page-content legal-page" data-legal-page>
       <section class="page-intro">
-        <div><h1>Legal Kit</h1><p>Assess a brand's content against selected frameworks and track the review decision.</p></div>
-        {% if selected_kit and not legal_portal_error %}<a class="button button-secondary" href="/legal/share/{{ current_user.username }}?brand_kit_id={{ selected_kit.id }}" target="_blank" rel="noopener">Preview access portal <span aria-hidden="true">↗</span></a>{% endif %}
+        <div><h1>Legal Kit</h1><p>Assess a brand's content against selected frameworks.</p></div>
       </section>
       {% if legal_data_error %}
         <div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>Your sign-in is active. The brand-content review needs workspace storage to be available.</p></div>
@@ -46,25 +45,10 @@
           </section>
           <script type="application/json" data-saved-legal-report>{{ legal_review_report|tojson }}</script>
           <section class="legal-analysis-results" data-compliance-analysis {% if not legal_review_has_report %}hidden{% endif %} tabindex="-1" aria-labelledby="legal-analysis-results-heading">
-            <div class="legal-analysis-results-heading"><div><h2 id="legal-analysis-results-heading">Alignment report</h2><p class="legal-report-brand-name">{{ selected_kit.brand_name or selected_kit.name }}</p></div><span class="status-pill" data-review-status-pill>{{ legal_review_status_labels.get(legal_review_status, 'Not reviewed') }}</span></div>
+            <div class="legal-analysis-results-heading"><div><h2 id="legal-analysis-results-heading">Alignment report</h2><p class="legal-report-brand-name">{{ selected_kit.brand_name or selected_kit.name }}</p></div></div>
             <p class="legal-analysis-summary" data-analysis-summary>{{ legal_review_analysis.get('summary', '') if legal_review_analysis else '' }}</p>
             <div data-analysis-findings class="legal-analysis-findings"></div>
             <p class="legal-report-persistence-note" data-report-persistence-status role="status" aria-live="polite"></p>
-          </section>
-          <section class="legal-report-review" data-report-workflow {% if not legal_review_has_report %}hidden{% endif %} aria-labelledby="legal-review-stage-heading">
-            <div class="legal-report-review-heading"><h2 id="legal-review-stage-heading">Review stage</h2><p>Record each decision and when it changed.</p></div>
-            <form class="legal-review-form" data-report-review-form>
-              <div><label for="legal-review-status">Stage</label><select id="legal-review-status" name="status" data-review-status>
-                {% for key, label in legal_review_status_labels.items() %}{% if key != 'not_analyzed' %}<option value="{{ key }}" {{ 'selected' if key == legal_review_status else '' }}>{{ label }}</option>{% endif %}{% endfor %}
-              </select></div>
-              <div class="legal-review-note-field"><label for="legal-review-note">Change note</label><input id="legal-review-note" name="note" maxlength="1000" placeholder="What changed or what needs attention?"></div>
-              <div class="legal-review-submit"><button type="submit" class="button button-secondary" data-save-review-stage>Save review update</button><p data-review-update-feedback role="status" aria-live="polite"></p></div>
-            </form>
-            <section class="legal-review-history-section" aria-labelledby="legal-review-history-heading"><h3 id="legal-review-history-heading">Change history</h3><ol class="legal-review-history" data-review-history>
-              {% for event in legal_review_history|reverse %}
-              <li><div class="legal-history-topline"><strong>{{ legal_review_status_labels.get(event.status, event.status|replace('_', ' ')|title) }}</strong><time datetime="{{ event.changed_at }}">{{ event.changed_at[:16].replace('T', ' ') }} UTC</time></div>{% if event.changed_by %}<p>Changed by {{ event.changed_by }}</p>{% endif %}{% if event.note %}<p>{{ event.note }}</p>{% endif %}</li>
-              {% endfor %}
-            </ol><p class="legal-history-empty" data-review-history-empty {% if legal_review_history %}hidden{% endif %}>No review changes have been recorded yet.</p></section>
           </section>
           {% if is_admin and not legal_portal_error %}
           <section class="legal-requests-section"><div class="section-title-row"><div><h2>Access requests</h2></div></div>{% set pending_requests = access_requests|selectattr('status', 'equalto', 'pending')|list %}{% if pending_requests %}<div class="access-request-list">{% for item in pending_requests %}<article class="access-request-card" data-access-request data-request-id="{{ item.id }}"><div class="access-request-main"><span class="request-standard">{{ item.standard }}</span><h3>{{ item.requester_name or item.email }}</h3><p>{{ item.email }}</p>{% if item.reason %}<blockquote>{{ item.reason }}</blockquote>{% endif %}<small>Requested {{ item.created_at[:10] if item.created_at else 'recently' }}</small></div><div class="access-request-actions"><button type="button" class="button button-secondary" data-review-request="denied">Deny</button><button type="button" class="button button-primary" data-review-request="approved">Approve</button><p class="inline-feedback" data-request-feedback role="status" aria-live="polite"></p></div></article>{% endfor %}</div>{% else %}<div class="empty-request-state"><strong>No access requests need review.</strong></div>{% endif %}</section>

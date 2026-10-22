@@ -1475,27 +1475,12 @@ def legal_page(request: Request, brand_kit_id: str = "") -> Any:
             logger.warning("Legal access-portal records unavailable for brand_kit_id=%s", selected_kit.get("id"))
             entries, requests, legal_portal_error = [], [], True
 
-    status_labels = {
-        "not_analyzed": "Not analyzed",
-        "analysis_ready": "Report ready",
-        "in_review": "In review",
-        "changes_needed": "Changes needed",
-        "reviewed": "Reviewed",
-    }
     report: dict[str, Any] = {}
     report_analysis: dict[str, Any] = {}
-    history: list[dict[str, Any]] = []
-    review_status = "not_analyzed"
-    report_updated_at = ""
     selected_standards = list(LEGAL_DISPLAY_STANDARDS)
     if selected_kit:
         report = _json_value(selected_kit.get("legal_review_report", {}), dict, {})
         report_analysis = _json_value(report.get("analysis", {}), dict, {})
-        history = _json_value(selected_kit.get("legal_review_history", []), list, [])
-        review_status = str(selected_kit.get("legal_review_status", "not_analyzed"))
-        if review_status not in status_labels:
-            review_status = "not_analyzed"
-        report_updated_at = str(selected_kit.get("legal_review_updated_at") or report.get("generated_at") or "")
         saved_standards = report.get("frameworks")
         if isinstance(saved_standards, list):
             selected_standards = [str(value) for value in saved_standards if str(value) in LEGAL_DISPLAY_STANDARDS]
@@ -1508,9 +1493,6 @@ def legal_page(request: Request, brand_kit_id: str = "") -> Any:
         "brand_kits": kits, "selected_kit": selected_kit,
         "legal_display_standards": LEGAL_DISPLAY_STANDARDS,
         "legal_review_report": report, "legal_review_analysis": report_analysis,
-        "legal_review_history": history, "legal_review_status": review_status,
-        "legal_review_updated_at": report_updated_at,
-        "legal_review_status_labels": status_labels,
         "legal_selected_standards": selected_standards,
         "legal_review_has_report": legal_review_has_report,
     })
@@ -1633,24 +1615,10 @@ async def analyze_legal_brand(request: Request, payload: LegalAnalysisRequest) -
         entries = []
     result = generate_legal_analysis(kit, entries, standards)
     timestamp = now_iso()
-    previous_status = str(kit.get("legal_review_status", "not_analyzed"))
-    history = _json_value(kit.get("legal_review_history", []), list, [])
     report = {"analysis": result, "frameworks": standards, "generated_at": timestamp}
-    history = [*history, {
-        "from_status": previous_status,
-        "status": "analysis_ready",
-        "changed_at": timestamp,
-        "changed_by": str(user.get("username", "user")),
-        "note": "Content alignment analysis generated for " + ", ".join(standards) + ".",
-    }][-100:]
     persisted = False
     try:
-        updated = store.update_kit(str(kit["id"]), {
-            "legal_review_report": report,
-            "legal_review_status": "analysis_ready",
-            "legal_review_updated_at": timestamp,
-            "legal_review_history": history,
-        })
+        updated = store.update_kit(str(kit["id"]), {"legal_review_report": report})
         persisted = updated is not None
     except HTTPException as exc:
         if exc.status_code != 503:
@@ -1662,60 +1630,8 @@ async def analyze_legal_brand(request: Request, payload: LegalAnalysisRequest) -
         "report": report,
         "brand_name": str(kit.get("brand_name") or kit.get("name") or "Selected brand"),
         "persisted": persisted,
-        "review_status": "analysis_ready",
-        "review_updated_at": timestamp,
-        "review_history": history,
-        "persistence_message": "Report saved." if persisted else "Report generated, but saving the report history is unavailable. Apply the brand review report migration to enable saved review history.",
+        "persistence_message": "Report saved." if persisted else "Report generated, but could not be saved. Check workspace storage.",
     })
-
-
-LEGAL_REVIEW_STATUSES = {"analysis_ready", "in_review", "changes_needed", "reviewed"}
-
-
-class LegalReviewUpdate(BaseModel):
-    brand_kit_id: str = Field(min_length=1, max_length=100)
-    status: str
-    note: str = Field(default="", max_length=1000)
-
-
-@app.put("/api/legal/review")
-async def update_legal_review(request: Request, payload: LegalReviewUpdate) -> JSONResponse:
-    await check_csrf(request)
-    user = login_required(request)
-    if payload.status not in LEGAL_REVIEW_STATUSES:
-        raise HTTPException(status_code=422, detail="Choose a valid review stage.")
-    kits = store.list_kits(user)
-    kit = next((item for item in kits if str(item.get("id")) == payload.brand_kit_id), None)
-    if not kit:
-        raise HTTPException(status_code=404, detail="The selected brand could not be found in your workspace.")
-    report = _json_value(kit.get("legal_review_report", {}), dict, {})
-    if not report.get("analysis"):
-        raise HTTPException(status_code=409, detail="Analyze the brand content before moving the review stage.")
-    previous_status = str(kit.get("legal_review_status", "analysis_ready"))
-    history = _json_value(kit.get("legal_review_history", []), list, [])
-    timestamp = now_iso()
-    note = payload.note.strip()
-    history.append({
-        "from_status": previous_status,
-        "status": payload.status,
-        "changed_at": timestamp,
-        "changed_by": str(user.get("username", "user")),
-        "note": note,
-    })
-    history = history[-100:]
-    try:
-        updated = store.update_kit(str(kit["id"]), {
-            "legal_review_status": payload.status,
-            "legal_review_updated_at": timestamp,
-            "legal_review_history": history,
-        })
-    except HTTPException as exc:
-        if exc.status_code != 503:
-            raise
-        raise HTTPException(status_code=503, detail="The review change could not be saved. Apply the brand review report migration and check workspace storage.") from exc
-    if not updated:
-        raise HTTPException(status_code=503, detail="The review change could not be saved. Check workspace storage.")
-    return JSONResponse({"ok": True, "status": payload.status, "updated_at": timestamp, "history": history})
 
 
 class LegalUpdate(BaseModel):

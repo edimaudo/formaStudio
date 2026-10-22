@@ -555,7 +555,9 @@ def test_legal_checklist_is_scoped_to_a_selected_brand():
     assert "Northline Outdoors" in response.text
     assert "Selected brand" in response.text
     assert "Privacy, consent and personal data" in response.text
-    assert "Review stage" in response.text
+    assert "Review stage" not in response.text
+    assert "Preview access portal" not in response.text
+    assert "Preview access portal" not in response.text
     assert "Evidence stage" not in response.text
     assert 'data-analysis-standard value="GDPR" checked' in response.text
     assert 'data-analysis-standard value="ISO 27001" checked' in response.text
@@ -582,24 +584,28 @@ def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
 
 
 
-def test_editor_uses_sticky_project_sections_and_combined_review_sharing():
+def test_editor_uses_real_tabs_and_combined_design_review():
     client = TestClient(app)
     _sign_in(client, "studioadmin", "FormaAdmin!2026")
     response = client.get("/kits/starter-kit-001")
     assert response.status_code == 200
     html = response.text
+    editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     for target, label in [
-        ("#identity", "Brand identity"),
-        ("#brand-story", "Brand story"),
-        ("#culture", "Cultural lens"),
-        ("#review-sharing", "Review &amp; sharing"),
+        ("identity", "Brand identity"),
+        ("brand-story", "Brand story"),
+        ("culture", "Cultural lens"),
+        ("design-review", "Design Review"),
     ]:
-        assert f'href="{target}"' in html
-        assert label in html
-    assert 'id="review-sharing"' in html
-    assert 'id="final-preview"' not in html
-    assert 'id="share-settings"' not in html
-    assert "Brand summary" in html and "Sharing &amp; access" in html
+        assert f'data-editor-tab="{target}"' in editor_tabs
+        assert label in editor_tabs
+    assert 'id="design-review"' in html
+    assert 'id="review-sharing"' not in html
+    assert 'data-editor-panel="brand-story" hidden' in html
+    assert 'data-editor-panel="culture" hidden' in html
+    assert 'data-editor-panel="design-review" hidden' in html
+    assert 'data-kit-live-preview' in html
+    assert "Sharing &amp; access" in html
     assert '<a class="text-link" href="/kits">← Back to Brand Kits</a>' in html
     assert 'data-block-tabs' in html
     assert 'data-block-section-tab="Colors"' in html
@@ -802,7 +808,7 @@ def test_brand_kits_page_uses_top_level_existing_and_create_tabs():
     assert "activateKitPage" in js and "ArrowLeft" in js
 
 
-def test_legal_kit_uses_framework_checkboxes_and_one_brand_report_review_stage():
+def test_legal_kit_uses_framework_checkboxes_without_review_stage_or_portal_preview():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/legal?brand_kit_id=starter-kit-002")
@@ -813,8 +819,9 @@ def test_legal_kit_uses_framework_checkboxes_and_one_brand_report_review_stage()
     for standard in ["GDPR", "ISO 27001", "SOC 2 Type II"]:
         assert f'data-analysis-standard value="{standard}" checked' in html
     assert 'data-analyze-compliance' in html
-    assert 'data-report-workflow hidden' in html
-    assert "Review stage" in html
+    assert 'data-report-workflow' not in html
+    assert "Review stage" not in html
+    assert "Preview access portal" not in html
     assert "Evidence workflow" not in html
     assert "Include frameworks in this review" not in html
     assert "have evidence recorded" not in html
@@ -851,7 +858,7 @@ def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkey
 
 
 
-def test_brand_alignment_report_and_review_history_are_saved_per_brand(monkeypatch):
+def test_brand_alignment_report_is_saved_without_review_stage_workflow(monkeypatch):
     from copy import deepcopy
     from app import main as main_module
 
@@ -859,9 +866,9 @@ def test_brand_alignment_report_and_review_history_are_saved_per_brand(monkeypat
         return  # Live persistence needs the configured Supabase report migration.
     kit = main_module.store.get_kit_by_id("starter-kit-002")
     assert kit is not None
-    fields = {key: deepcopy(kit.get(key)) for key in (
-        "legal_review_report", "legal_review_status", "legal_review_updated_at", "legal_review_history"
-    )}
+    original_report = deepcopy(kit.get("legal_review_report"))
+    original_status = deepcopy(kit.get("legal_review_status"))
+    original_history = deepcopy(kit.get("legal_review_history"))
     monkeypatch.setattr(main_module, "generate_legal_analysis", lambda _kit, _entries, standards: {
         "summary": "The selected brand content needs review against the selected themes.",
         "standards": [{
@@ -882,21 +889,15 @@ def test_brand_alignment_report_and_review_history_are_saved_per_brand(monkeypat
         })
         assert analyzed.status_code == 200
         assert analyzed.json()["persisted"] is True
-        assert kit["legal_review_status"] == "analysis_ready"
         assert kit["legal_review_report"]["frameworks"] == ["GDPR", "ISO 27001"]
-        update = client.put("/api/legal/review", headers={"X-CSRF-Token": csrf}, json={
-            "brand_kit_id": "starter-kit-002", "status": "in_review", "note": "Initial content review"
-        })
-        assert update.status_code == 200
-        assert update.json()["status"] == "in_review"
-        assert update.json()["history"][-1]["changed_at"]
-        assert update.json()["history"][-1]["note"] == "Initial content review"
+        assert "review_status" not in analyzed.json()
+        assert "review_history" not in analyzed.json()
         refreshed = client.get("/legal?brand_kit_id=starter-kit-002").text
         assert "The selected brand content needs review" in refreshed
-        assert "Initial content review" in refreshed
-        assert "In review" in refreshed
+        assert "Review stage" not in refreshed
     finally:
-        kit.update(fields)
+        kit.update({"legal_review_report": original_report, "legal_review_status": original_status, "legal_review_history": original_history})
+
 
 def test_legal_analysis_rejects_brand_not_accessible_to_current_user(monkeypatch):
     from app import main as main_module
@@ -992,10 +993,13 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
     html = response.text
     sidebar = html.split('<aside id="workspace-sidebar"', 1)[1].split('</aside>', 1)[0]
     assert 'project-nav-name' not in sidebar
-    for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#review-sharing"'):
+    for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#design-review"'):
         assert target not in sidebar
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
-    assert 'href="#identity"' in editor_tabs
-    assert 'href="#brand-story"' in editor_tabs
-    assert 'href="#culture"' in editor_tabs
-    assert 'href="#review-sharing"' in editor_tabs
+    assert 'role="tablist"' in editor_tabs
+    for target in ('data-editor-tab="identity"', 'data-editor-tab="brand-story"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
+        assert target in editor_tabs
+    panels = re.findall(r'<section id="(identity|brand-story|culture|design-review)".*?>', html)
+    assert panels == ['identity', 'brand-story', 'culture', 'design-review']
+    assert 'id="brand-story" class="editor-section editor-section-separated" role="tabpanel" aria-labelledby="editor-tab-brand-story" data-editor-panel="brand-story" hidden' in html
+    assert '<h2 id="design-review-heading">Design Review</h2>' in html
