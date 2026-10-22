@@ -110,7 +110,7 @@ The authenticated workspace intentionally has no global app header or role badge
 
 ## Current brand editor
 
-The brand editor uses five primary tabs: Brand Definition, Brand Messaging & Story, Brand Components, Cultural Lens, and Design Review. Brand Messaging & Story contains equally sized Core Messaging and Brand Story subtabs. Brand Components exposes Colors, Typography, and Logos. Existing Icons, Visuals, Videos, Resources, 3D Models, and Collaterals content is preserved in hidden state when kits are saved; those types are not shown in the current component editor.
+The brand editor uses five primary tabs: Brand Definition, Brand Messaging & Story, Brand Components, Cultural Lens, and Design Review. Brand Messaging & Story contains equally sized Core Messaging and Brand Story subtabs. Brand Components exposes Colors and Typography. The Logo editor is hidden on request, and previously saved logo data is preserved invisibly when a kit is saved. Existing Icons, Visuals, Videos, Resources, 3D Models, and Collaterals content is also preserved in hidden state; these types are not shown in the current component editor.
 
 Typography offers 50 curated Google Fonts families. Headline choices suggest a complementary body typeface and the live sample preview updates as choices change. The Google Fonts stylesheet is an optional browser dependency; system fallback fonts remain available if fonts cannot be fetched. Logo concepts offer wordmark, monogram, emblem, and combination previews styled using the current palette and headline font. These are concept mockups, not final vector artwork.
 

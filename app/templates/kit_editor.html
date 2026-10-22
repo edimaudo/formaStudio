@@ -19,7 +19,7 @@
   <main id="main-content" tabindex="-1" class="app-main">
     <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
     <div class="page-content editor-page" data-kit-editor data-kit-id="{{ kit.id }}">
-      <section class="editor-intro"><div><a href="/kits" class="back-link">← All brand kits</a><h1>{{ kit.brand_name }}</h1></div><div class="editor-actions"><span class="publish-state-label" data-publish-state>{{ 'Live' if kit.status == 'published' else 'Draft' }}</span><button class="button button-secondary" type="button" data-save-kit>Save changes</button><button class="button button-primary" type="button" data-publish-kit>{{ 'Update live kit' if kit.status == 'published' else 'Publish brand kit' }}</button></div></section>
+      <section class="editor-intro"><div class="editor-title-block"><h1>{{ kit.brand_name }}</h1></div><div class="editor-actions" aria-label="Brand kit actions"><a href="/kits" class="button button-secondary editor-back-button">← Back to Brand Kits</a><button class="button button-danger" type="button" data-delete-kit>Delete Kit</button><button class="button button-secondary" type="button" data-save-kit>Save Changes</button><button class="button button-primary" type="button" data-publish-kit>{{ 'Update Live Kit' if kit.status == 'published' else 'Publish Kit' }}</button></div></section>
       <div class="save-feedback" data-save-feedback role="status" aria-live="polite"></div>
       <nav class="editor-tabs" aria-label="Brand kit sections" role="tablist" data-editor-tabs>
         <button type="button" role="tab" id="editor-tab-definition" aria-controls="brand-definition" aria-selected="true" class="active" data-editor-tab="definition">Brand Definition</button>
@@ -163,7 +163,7 @@
           </div>
         </div>
       </section>
-      <div class="editor-bottom-actions"><a class="text-link" href="/kits">← Back to Brand Kits</a><div><button type="button" class="button button-secondary" data-delete-kit>Delete kit</button><button type="button" class="button button-primary" data-save-kit>Save changes</button></div></div>
+
     </div>
   </main>
 </div>

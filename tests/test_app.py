@@ -31,7 +31,7 @@ def test_visible_brand_block_types_hide_legacy_3d_and_collateral_sections():
     assert "Collaterals" not in BLOCK_TYPES
     assert set(LEGACY_BLOCK_TYPES) == {"3D Models", "Collaterals"}
     assert set(LEGACY_BLOCK_TYPES).issubset(STORED_BLOCK_TYPES)
-    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos"]
+    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography"]
     assert len(FONT_FAMILIES) == 50
     assert len(set(FONT_FAMILIES)) == 50
     js_path = Path(__file__).parents[1] / "app/static/js/app.js"
@@ -618,11 +618,17 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-messaging-panel="core"' in html and 'data-messaging-panel="story" hidden' in html
     assert 'data-kit-live-preview' in html
     assert "Sharing &amp; access" in html
-    assert '<a class="text-link" href="/kits">← Back to Brand Kits</a>' in html
+    intro = html.split('<section class="editor-intro"', 1)[1].split('</section>', 1)[0]
+    assert 'class="button button-secondary editor-back-button"' in intro
+    assert '← Back to Brand Kits' in intro
+    assert 'data-delete-kit' in intro and 'data-save-kit' in intro and 'data-publish-kit' in intro
+    assert html.count('data-delete-kit') == 1
+    assert html.count('data-save-kit') == 1
+    assert 'editor-bottom-actions' not in html
     assert 'data-block-tabs' in html
     assert 'data-block-section-tab="Colors"' in html
     assert 'data-block-section-tab="Typography"' in html
-    assert 'data-block-section-tab="Logos"' in html
+    assert 'data-block-section-tab="Logos"' not in html
     assert 'data-block-type="select"' not in html
     assert 'data-add-block' not in html
     assert "Find the words that stick" not in html
@@ -634,11 +640,11 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert html.count('data-typography-field="heading_font"') == 1
     assert html.count('<option value="Inter"') >= 2
     assert 'data-type-preview-headline' in html and 'data-type-preview-body' in html
-    assert 'data-logo-direction' in html
-    assert 'data-logo-template-grid' in html
-    for template in ('wordmark', 'monogram', 'emblem', 'combination'):
-        assert f'data-logo-kind="{template}"' in html
-    assert 'data-logo-live-preview' in html
+    # Logo editing is hidden from the UI but existing logo block data is retained in the hidden payload.
+    assert 'data-logo-direction' not in html
+    assert 'data-logo-template-grid' not in html
+    assert 'data-logo-live-preview' not in html
+    assert 'data-legacy-blocks' in html
     assert 'data-preview-palette' in html
     assert 'data-preview-blocks' in html
     # The old 3D Models/Collaterals content is preserved in a non-rendering JSON payload,
@@ -1025,7 +1031,7 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
     assert '<h2 id="design-review-heading">Design Review</h2>' in html
 
 
-def test_editor_typography_has_50_fonts_and_brand_aware_logo_templates():
+def test_editor_typography_has_50_fonts_and_logo_editor_is_hidden():
     client = TestClient(app)
     _sign_in(client, "studioadmin", "FormaAdmin!2026")
     response = client.get("/kits/starter-kit-001")
@@ -1034,8 +1040,9 @@ def test_editor_typography_has_50_fonts_and_brand_aware_logo_templates():
     assert html.count('<option value=') >= 150
     assert 'data-type-preview-headline' in html
     assert 'data-type-preview-body' in html
-    assert 'data-logo-template-grid' in html
-    assert 'data-logo-lockup' in html
+    assert 'data-logo-template-grid' not in html
+    assert 'data-logo-lockup' not in html
+    assert 'data-legacy-blocks' in html
     assert "preferredBodyFonts" in (Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
 
 def test_cultural_lens_uses_country_and_region_and_sends_brand_context():
@@ -1050,7 +1057,7 @@ def test_cultural_lens_uses_country_and_region_and_sends_brand_context():
     assert 'brand_story:' in js and 'positioning:' in js
 
 
-def test_editor_actions_are_right_aligned_plain_status_and_components_hide_icons():
+def test_editor_actions_are_grouped_at_top_and_logo_editor_is_hidden():
     from pathlib import Path
     root = Path(__file__).parents[1]
     client = TestClient(app)
@@ -1061,11 +1068,45 @@ def test_editor_actions_are_right_aligned_plain_status_and_components_hide_icons
     tabs = html.split('<nav class="block-type-tabs"', 1)[1].split('</nav>', 1)[0]
     assert 'data-block-section-tab="Colors"' in tabs
     assert 'data-block-section-tab="Typography"' in tabs
-    assert 'data-block-section-tab="Logos"' in tabs
+    assert 'data-block-section-tab="Logos"' not in tabs
     assert 'data-block-section-tab="Icons"' not in tabs
-    assert 'class="publish-state-label" data-publish-state' in html
-    assert 'class="status-pill status-draft" data-publish-state' not in html
+    assert 'data-publish-state' not in html
+    assert 'class="button button-secondary editor-back-button"' in html
+    assert 'data-delete-kit' in html and 'data-save-kit' in html and 'data-publish-kit' in html
+    assert html.count('data-delete-kit') == 1 and html.count('data-save-kit') == 1
+    assert 'editor-bottom-actions' not in html
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
-    assert '.editor-page .editor-actions { display: flex; flex: 0 0 auto;' in css
+    assert '.editor-page .editor-actions {' in css and 'justify-content: flex-end;' in css
     assert '.editor-subpanel .ai-copy-form > .form-two-col { display: grid; grid-template-columns: minmax(0, 1fr);' in css
-    assert 'data-legacy-blocks' in html and '"Icons"' in html
+    assert 'data-legacy-blocks' in html and '"Icons"' in html and '"Logos"' in html
+
+
+def test_editor_has_pure_underline_tabs_consistent_actions_and_linear_story_layout():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    html = TestClient(app)
+    _sign_in(html, "client", "FormaClient!2026")
+    response = html.get("/kits/starter-kit-002")
+    assert response.status_code == 200
+    content = response.text
+    editor_intro = content.split('<section class="editor-intro"', 1)[1].split('</section>', 1)[0]
+    assert 'class="button button-secondary editor-back-button"' in editor_intro
+    assert 'data-delete-kit' in editor_intro and 'data-save-kit' in editor_intro and 'data-publish-kit' in editor_intro
+    assert content.count('data-delete-kit') == 1 and content.count('data-save-kit') == 1
+    assert 'data-block-section-tab="Logos"' not in content
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert '.editor-page .editor-tabs [role="tab"][aria-selected="true"]' in css
+    assert 'border-bottom: 2px solid var(--brand)' in css
+    assert '.editor-subpanel .story-editor-layout .ai-copy-panel {' in css
+    assert 'grid-template-columns: minmax(0, 1fr);' in css
+    assert '.button-danger {' in css
+
+
+def test_button_primary_uses_same_fill_and_foreground_in_light_and_dark_modes():
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert ".button-primary {" in css
+    assert "background: #30364a;" in css
+    assert "color: #f8f9fc;" in css
+    assert "html[data-theme=\"dark\"] .button-primary,\nhtml[data-theme=\"dark\"] .button-primary:hover {\n  border-color: #30364a;\n  background: #30364a;\n  color: #f8f9fc;" in css
+    assert ".button-danger {" in css
