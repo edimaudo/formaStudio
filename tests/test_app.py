@@ -582,7 +582,7 @@ def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
 
 
 
-def test_editor_uses_sticky_project_sections_tabs_and_a_final_preview():
+def test_editor_uses_sticky_project_sections_and_combined_review_sharing():
     client = TestClient(app)
     _sign_in(client, "studioadmin", "FormaAdmin!2026")
     response = client.get("/kits/starter-kit-001")
@@ -592,12 +592,14 @@ def test_editor_uses_sticky_project_sections_tabs_and_a_final_preview():
         ("#identity", "Brand identity"),
         ("#brand-story", "Brand story"),
         ("#culture", "Cultural lens"),
-        ("#share-settings", "Sharing &amp; access"),
-        ("#final-preview", "Final preview"),
+        ("#review-sharing", "Review &amp; sharing"),
     ]:
         assert f'href="{target}"' in html
         assert label in html
-    assert 'id="final-preview"' in html
+    assert 'id="review-sharing"' in html
+    assert 'id="final-preview"' not in html
+    assert 'id="share-settings"' not in html
+    assert "Brand summary" in html and "Sharing &amp; access" in html
     assert '<a class="text-link" href="/kits">← Back to Brand Kits</a>' in html
     assert 'data-block-tabs' in html
     assert 'data-block-section-tab="Colors"' in html
@@ -975,6 +977,8 @@ def test_brand_card_compliance_is_a_prominent_button_link():
     response = client.get("/kits")
     assert response.status_code == 200
     html = response.text
+    assert 'class="button button-secondary button-small edit-kit-button"' in html
+    assert 'aria-label="Edit brand kit Northline Outdoors"' in html
     assert 'class="button button-secondary button-small compliance-button"' in html
     assert 'href="/legal?brand_kit_id=starter-kit-002"' in html
     assert 'aria-label="Open compliance review for Northline Outdoors"' in html
@@ -987,12 +991,11 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
     assert response.status_code == 200
     html = response.text
     sidebar = html.split('<aside id="workspace-sidebar"', 1)[1].split('</aside>', 1)[0]
-    assert 'project-nav-name' in sidebar
-    for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#share-settings"', 'href="#final-preview"'):
+    assert 'project-nav-name' not in sidebar
+    for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#review-sharing"'):
         assert target not in sidebar
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     assert 'href="#identity"' in editor_tabs
     assert 'href="#brand-story"' in editor_tabs
     assert 'href="#culture"' in editor_tabs
-    assert 'href="#share-settings"' in editor_tabs
-    assert 'href="#final-preview"' in editor_tabs
+    assert 'href="#review-sharing"' in editor_tabs
