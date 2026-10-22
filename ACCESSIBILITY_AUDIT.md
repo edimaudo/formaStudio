@@ -27,7 +27,7 @@ Do not describe the deployed application as WCAG-conformant until the deployed b
 
 ## Latest brand editor controls
 
-The current brand editor exposes six primary tab panels (Brand Definition, Brand Messaging, Brand Components, Brand Story, Cultural Lens, Design Review). Only the selected top-level panel is displayed. The component tab list is limited to Colors, Typography, Logos, and Icons; hidden legacy Visuals, Videos, and Resources blocks are serialized and preserved on save.
+The current brand editor exposes five primary tab panels (Brand Definition, Brand Messaging & Story, Brand Components, Cultural Lens, Design Review). Only the selected top-level panel is displayed. Brand Messaging & Story contains a second, keyboard-operable tablist for Core Messaging and Brand Story. The component tab list is limited to Colors, Typography, and Logos; hidden Icons, Visuals, Videos, Resources, 3D Models, and Collaterals blocks are serialized and preserved on save.
 
 Typography controls use explicit labels for the 50-family headline/body/accent font selectors, a suggested complementary body pairing, and visible live sample previews. Logo structures are presented as labelled native radio inputs inside a fieldset, with brand-aware visual concept previews. Cultural Lens includes labelled country and state/province selectors for Canada and the USA. The submitted cultural request includes the current positioning and Brand Story so the interpretation has the brand context rather than only a market name.
 

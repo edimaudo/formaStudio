@@ -156,7 +156,7 @@ validate_base_url("QLOO_BASE_URL", QLOO_BASE_URL)
 BLOCK_TYPES = [
     "Colors", "Typography", "Logos", "Visuals", "Videos", "Icons", "Resources", "Brand Story",
 ]
-IDENTITY_BLOCK_TYPES = ["Colors", "Typography", "Logos", "Icons"]
+IDENTITY_BLOCK_TYPES = ["Colors", "Typography", "Logos"]
 FONT_FAMILIES = [
     "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins", "Source Sans 3", "Nunito Sans",
     "Work Sans", "DM Sans", "Manrope", "IBM Plex Sans", "Source Serif 4", "Merriweather", "Playfair Display",
@@ -957,7 +957,7 @@ def edit_kit(request: Request, kit_id: str) -> Any:
     hidden_legacy_blocks: list[dict[str, Any]] = []
     source_blocks = [dict(block) for block in (kit.get("blocks") or [])]
     for block in source_blocks:
-        if block.get("type") in LEGACY_BLOCK_TYPES or block.get("type") in {"Visuals", "Videos", "Resources"}:
+        if block.get("type") in LEGACY_BLOCK_TYPES or block.get("type") in {"Visuals", "Videos", "Resources", "Icons"}:
             # These blocks are hidden in the current editor but retained on save.
             hidden_legacy_blocks.append(block)
         elif block.get("type") in BLOCK_TYPES:
@@ -966,7 +966,6 @@ def edit_kit(request: Request, kit_id: str) -> Any:
         "Colors": ("Color palette", "Choose color values and record where they should be used."),
         "Typography": ("Type system", "Choose heading and body typefaces and define their hierarchy."),
         "Logos": ("Logo direction", "Explore a form and visual character before producing final artwork."),
-        "Icons": ("Icon system", "Define shape, stroke, density, and where icons are useful."),
         "Brand Story": ("Brand story", "What should people understand, feel, and remember?"),
     }
     existing_types = {block.get("type") for block in visible_blocks}

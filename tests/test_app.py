@@ -31,7 +31,7 @@ def test_visible_brand_block_types_hide_legacy_3d_and_collateral_sections():
     assert "Collaterals" not in BLOCK_TYPES
     assert set(LEGACY_BLOCK_TYPES) == {"3D Models", "Collaterals"}
     assert set(LEGACY_BLOCK_TYPES).issubset(STORED_BLOCK_TYPES)
-    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos", "Icons"]
+    assert IDENTITY_BLOCK_TYPES == ["Colors", "Typography", "Logos"]
     assert len(FONT_FAMILIES) == 50
     assert len(set(FONT_FAMILIES)) == 50
     js_path = Path(__file__).parents[1] / "app/static/js/app.js"
@@ -601,9 +601,8 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     for target, label in [
         ("definition", "Brand Definition"),
-        ("messaging", "Brand Messaging"),
+        ("messaging-story", "Brand Messaging &amp; Story"),
         ("components", "Brand Components"),
-        ("brand-story", "Brand Story"),
         ("culture", "Cultural Lens"),
         ("design-review", "Design Review"),
     ]:
@@ -611,11 +610,12 @@ def test_editor_uses_real_tabs_and_combined_design_review():
         assert label in editor_tabs
     assert 'id="design-review"' in html
     assert 'id="review-sharing"' not in html
-    assert 'data-editor-panel="messaging" hidden' in html
+    assert 'data-editor-panel="messaging-story" hidden' in html
     assert 'data-editor-panel="components" hidden' in html
-    assert 'data-editor-panel="brand-story" hidden' in html
     assert 'data-editor-panel="culture" hidden' in html
     assert 'data-editor-panel="design-review" hidden' in html
+    assert 'data-messaging-tab="core"' in html and 'data-messaging-tab="story"' in html
+    assert 'data-messaging-panel="core"' in html and 'data-messaging-panel="story" hidden' in html
     assert 'data-kit-live-preview' in html
     assert "Sharing &amp; access" in html
     assert '<a class="text-link" href="/kits">← Back to Brand Kits</a>' in html
@@ -654,11 +654,12 @@ def test_brand_story_does_not_require_an_asset_and_tabs_are_keyboard_enabled():
     editor = (root / "app/templates/kit_editor.html").read_text(encoding="utf-8")
     js = (root / "app/static/js/app.js").read_text(encoding="utf-8")
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
-    story_section = editor.split('<section id="brand-story"', 1)[1].split('</section>', 1)[0]
+    story_section = editor.split('<section id="messaging-subpanel-story"', 1)[1].split('</section>', 1)[0]
     assert 'data-block-file' not in story_section
     assert 'data-block-url' not in story_section
     assert 'data-block-section-tab' in editor
     assert all(key in js for key in ("ArrowLeft", "ArrowRight", "Home", "End"))
+    assert '[data-editor-tab=\"messaging-story\"]' in js and '[data-messaging-tab=\"story\"]' in js
     assert '.editor-tabs { top: 0; z-index: 12;' in css
     assert '.block-type-tabs { position: sticky;' in css
     assert '.core-messaging-grid { grid-template-columns: 1fr; }' in css
@@ -1016,11 +1017,11 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
         assert target not in sidebar
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     assert 'role="tablist"' in editor_tabs
-    for target in ('data-editor-tab="definition"', 'data-editor-tab="messaging"', 'data-editor-tab="components"', 'data-editor-tab="brand-story"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
+    for target in ('data-editor-tab="definition"', 'data-editor-tab="messaging-story"', 'data-editor-tab="components"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
         assert target in editor_tabs
-    panels = re.findall(r'<section id="(brand-definition|brand-messaging|brand-components|brand-story|culture|design-review)".*?>', html)
-    assert panels == ['brand-definition', 'brand-messaging', 'brand-components', 'brand-story', 'culture', 'design-review']
-    assert 'id="brand-story" class="editor-section editor-section-separated" role="tabpanel" aria-labelledby="editor-tab-brand-story" data-editor-panel="brand-story" hidden' in html
+    panels = re.findall(r'<section id="(brand-definition|brand-messaging-story|brand-components|culture|design-review)".*?>', html)
+    assert panels == ['brand-definition', 'brand-messaging-story', 'brand-components', 'culture', 'design-review']
+    assert 'id="messaging-subpanel-story" class="editor-subpanel" role="tabpanel" aria-labelledby="messaging-subtab-story" data-messaging-panel="story" hidden' in html
     assert '<h2 id="design-review-heading">Design Review</h2>' in html
 
 
@@ -1047,3 +1048,24 @@ def test_cultural_lens_uses_country_and_region_and_sends_brand_context():
     assert 'data-culture-country' in html and 'data-culture-region' in html
     assert 'value="Canada"' in html and 'value="United States">USA</option>' in html
     assert 'brand_story:' in js and 'positioning:' in js
+
+
+def test_editor_actions_are_right_aligned_plain_status_and_components_hide_icons():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    tabs = html.split('<nav class="block-type-tabs"', 1)[1].split('</nav>', 1)[0]
+    assert 'data-block-section-tab="Colors"' in tabs
+    assert 'data-block-section-tab="Typography"' in tabs
+    assert 'data-block-section-tab="Logos"' in tabs
+    assert 'data-block-section-tab="Icons"' not in tabs
+    assert 'class="publish-state-label" data-publish-state' in html
+    assert 'class="status-pill status-draft" data-publish-state' not in html
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert '.editor-page .editor-actions { display: flex; flex: 0 0 auto;' in css
+    assert '.editor-subpanel .ai-copy-form > .form-two-col { display: grid; grid-template-columns: minmax(0, 1fr);' in css
+    assert 'data-legacy-blocks' in html and '"Icons"' in html

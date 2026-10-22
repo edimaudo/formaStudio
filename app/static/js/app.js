@@ -742,7 +742,8 @@
       story.querySelector('[data-block-content]').value = copy;
       renderFinalPreview();
       if (feedback) feedback.textContent = 'Story draft applied. Save changes to keep it.';
-      editor.querySelector('[data-editor-tab="brand-story"]')?.click();
+      editor.querySelector('[data-editor-tab="messaging-story"]')?.click();
+      editor.querySelector('[data-messaging-tab="story"]')?.click();
       story.querySelector('[data-block-content]')?.focus({ preventScroll: true });
     });
     editor.querySelector('[data-copy-copy]')?.addEventListener('click', async event => {
@@ -801,6 +802,31 @@
       const current = editorTabs.indexOf(document.activeElement);
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? editorTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + editorTabs.length) % editorTabs.length;
       activateEditorTab(editorTabs[next], true);
+    });
+
+    // Nested tabs keep core messaging and story editing within one combined brand section.
+    const messagingTabs = [...editor.querySelectorAll('[data-messaging-tab]')];
+    const messagingPanels = [...editor.querySelectorAll('[data-messaging-panel]')];
+    function activateMessagingTab(tab, focus = false) {
+      const selected = tab.dataset.messagingTab;
+      messagingTabs.forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      messagingPanels.forEach(panel => { panel.hidden = panel.dataset.messagingPanel !== selected; });
+      if (focus) tab.focus();
+    }
+    const initialMessagingTab = messagingTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || messagingTabs[0];
+    if (initialMessagingTab) activateMessagingTab(initialMessagingTab);
+    messagingTabs.forEach(tab => tab.addEventListener('click', () => activateMessagingTab(tab)));
+    editor.querySelector('[data-messaging-tabs]')?.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = messagingTabs.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? messagingTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + messagingTabs.length) % messagingTabs.length;
+      activateMessagingTab(messagingTabs[next], true);
     });
   }
 
