@@ -344,6 +344,30 @@ def test_builtin_application_credentials_work_in_production_without_login_env_va
         assert main_module.store.get_user(username)["role"] == role
 
 
+def test_landing_page_describes_current_brand_kit_capabilities():
+    html = TestClient(app).get("/").text
+    landing = html.lower()
+    for current_capability in (
+        "Brand Messaging",
+        "Color palette",
+        "Typography",
+        "Design Review",
+        "Cultural Lens",
+        "Legal Kit",
+        "Create a brand kit",
+        "Saved updates appear at the same link.",
+    ):
+        assert current_capability.lower() in landing
+    for unavailable_claim in (
+        "Primary logo",
+        "Approved asset",
+        "bring every asset together",
+        "Visual identity components",
+    ):
+        assert unavailable_claim.lower() not in landing
+    assert "messaging review, not certification" in landing
+
+
 def test_landing_steps_have_no_empty_number_column_or_list_markers():
     from pathlib import Path
 
