@@ -524,14 +524,14 @@
     }
     async function saveKit({ quiet = false, auto = false } = {}) {
       if (!editor.querySelector('[data-field="name"]').value.trim()) throw new Error('Add a project name before saving.');
-      if (feedback && (auto || !quiet)) feedback.textContent = 'Saving changes…';
+      if (feedback && !auto && !quiet) feedback.textContent = 'Saving changes…';
       const result = await api(`/api/kits/${encodeURIComponent(kitId)}`, { method: 'PUT', body: kitData() });
       saved = true;
       if (shareUrl && result.share_url) shareUrl.value = result.share_url;
       const openShare = editor.querySelector('[data-open-share]');
       if (openShare && result.share_url) openShare.href = result.share_url;
-      if (feedback) feedback.textContent = auto ? 'Changes saved automatically.' : (quiet ? '' : 'Changes saved.');
-      editor.querySelectorAll('[data-share-status]').forEach(node => node.textContent = 'Saved · link stays the same');
+      if (feedback && !auto) feedback.textContent = quiet ? '' : 'Changes saved.';
+      if (!auto) editor.querySelectorAll('[data-share-status]').forEach(node => node.textContent = 'Saved · link stays the same');
       editor.querySelectorAll('[data-save-kit]').forEach(button => { button.disabled = false; });
       return result;
     }

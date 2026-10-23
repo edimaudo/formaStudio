@@ -698,12 +698,20 @@ def test_brand_story_does_not_require_an_asset_and_tabs_are_keyboard_enabled():
     assert '.sharing-controls, .share-preview-card { height: 100%; }' in css
 
 
-def test_legal_kit_has_only_one_active_primary_navigation_item():
-    client = TestClient(app)
-    _sign_in(client, "client", "FormaClient!2026")
-    html = client.get("/legal").text
-    assert html.count('class="nav-item active"') == 1
-    assert '<a class="nav-item active" href="/legal" aria-current="page">' in html
+def test_legal_kit_is_not_a_primary_sidebar_item():
+    from pathlib import Path
+    templates = Path(__file__).resolve().parents[1] / "app" / "templates"
+    for template_name in ("dashboard.html", "brand_kits.html", "legal.html"):
+        html = (templates / template_name).read_text()
+        assert 'href="/legal"' not in html
+
+
+def test_autosave_does_not_show_success_or_share_status_messages():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "app" / "static" / "js" / "app.js").read_text()
+    assert "if (feedback && !auto) feedback.textContent = quiet ? '' : 'Changes saved.';" in js
+    assert "if (!auto) editor.querySelectorAll('[data-share-status]')" in js
+    assert "Changes saved automatically." not in js
 
 
 def test_brand_level_alignment_report_and_review_history_have_schema_and_migration():
@@ -1352,3 +1360,87 @@ def test_brand_writing_package_rejects_empty_selections_and_short_draft(monkeypa
     assert no_outputs.status_code == 422
     assert no_tones.status_code == 422
     assert short_story.status_code == 422
+
+
+
+def test_workspace_autosave_repair_migration_adds_current_fields_and_grants():
+    root = Path(__file__).parents[1]
+    migration = (root / "migrations" / "20261023_workspace_autosave_repair.sql").read_text(encoding="utf-8").lower()
+    for field in (
+        "description", "tagline", "elevator_pitch", "industry", "audience",
+        "cultural_country", "cultural_region", "access_mode", "access_password_hash",
+        "allowed_emails", "blocks", "legal_review_report", "legal_review_status",
+        "legal_review_updated_at", "legal_review_history",
+    ):
+        assert f"add column if not exists {field}" in migration
+    assert "grant usage on schema public to service_role" in migration
+    assert "grant all privileges on table public.brand_kits to service_role" in migration
+    assert "notify pgrst, 'reload schema'" in migration
+    assert "to anon" not in migration and "to authenticated" not in migration
+
+
+def test_autosave_schema_error_names_repair_migration_and_logs_column_diagnostic(monkeypatch, caplog):
+    import httpx
+    import pytest
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "SUPABASE_URL", "https://formastudio.supabase.co")
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit_test")
+
+    def missing_column(method, url, **kwargs):
+        return httpx.Response(
+            400,
+            json={"code": "PGRST204", "message": "Could not find the 'cultural_country' column of 'brand_kits' in the schema cache"},
+            request=httpx.Request(method, url),
+        )
+
+    monkeypatch.setattr(main_module.httpx, "request", missing_column)
+    data_store = main_module.DataStore.__new__(main_module.DataStore)
+    with pytest.raises(HTTPException) as error:
+        data_store._request("PATCH", "brand_kits", payload={"cultural_country": "Canada"})
+    assert error.value.status_code == 503
+    assert "20261023_workspace_autosave_repair.sql" in error.value.detail
+    assert main_module.user_facing_error_detail(error.value.detail, error.value.status_code) == error.value.detail
+    assert "cultural_country" in caplog.text
+    assert "PGRST204" in caplog.text
+    assert "sb_secret_unit_test" not in caplog.text
+
+
+def test_workspace_permission_error_has_safe_repair_guidance(monkeypatch):
+    import httpx
+    import pytest
+    from fastapi import HTTPException
+    from app import main as main_module
+
+    monkeypatch.setattr(main_module, "SUPABASE_URL", "https://formastudio.supabase.co")
+    monkeypatch.setattr(main_module, "SUPABASE_API_KEY", "sb_secret_unit_test")
+
+    def denied(method, url, **kwargs):
+        return httpx.Response(
+            403, json={"code": "42501", "message": "permission denied for table brand_kits"},
+            request=httpx.Request(method, url),
+        )
+
+    monkeypatch.setattr(main_module.httpx, "request", denied)
+    data_store = main_module.DataStore.__new__(main_module.DataStore)
+    with pytest.raises(HTTPException) as error:
+        data_store._request("PATCH", "brand_kits", payload={"tagline": "Saved"})
+    assert error.value.status_code == 503
+    assert "permissions" in error.value.detail
+    assert "20261023_workspace_autosave_repair.sql" in error.value.detail
+    assert main_module.user_facing_error_detail(error.value.detail, error.value.status_code) == error.value.detail
+    assert "sb_secret_unit_test" not in error.value.detail
+
+
+def test_application_uses_shared_loaded_font_system():
+    root = Path(__file__).parents[1]
+    base = (root / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+    css = (root / "app" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+    assert "family=Inter:wght@400;500;600;700" in base
+    assert "family=Playfair+Display:wght@400;500;600;700" in base
+    assert "--font-body: 'Inter'" in css
+    assert "--font-display: 'Playfair Display'" in css
+    assert "Iowan Old Style" not in css
+    assert "font-family: Georgia, serif;" not in css
+    assert "font-family: Georgia, 'Times New Roman', serif;" not in css

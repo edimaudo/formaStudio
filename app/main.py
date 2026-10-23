@@ -349,19 +349,31 @@ class DataStore:
         except httpx.HTTPStatusError as exc:
             status = response.status_code
             error_code = "unknown"
+            error_message = ""
             try:
                 error_body = response.json()
                 if isinstance(error_body, dict):
                     error_code = str(error_body.get("code") or error_body.get("error_code") or "unknown")[:64]
+                    # PostgREST's message is useful for diagnosing missing columns and grants.
+                    # It normally contains schema identifiers, not row data or credentials.
+                    error_message = re.sub(r"[\r\n\t]+", " ", str(error_body.get("message") or ""))[:240]
             except ValueError:
                 pass
-            # Log the safe status and provider error code for diagnosis. Never log headers,
-            # credentials, or the response body, which may contain sensitive details.
-            logger.warning("Supabase REST rejected request: method=%s table=%s status=%s code=%s", method, table, status, error_code)
+            # Log status/code and only the bounded database error message. Never log headers,
+            # credentials, request payloads, or the full response body.
+            logger.warning(
+                "Supabase REST rejected request: method=%s table=%s status=%s code=%s message=%s",
+                method, table, status, error_code, error_message or "(no message)",
+            )
             if status == 401:
                 detail = "Supabase rejected the server-side database key. Check that SUPABASE_URL matches the project and SUPABASE_SECRET_KEY contains its current Secret key (or use the legacy service-role key in its dedicated variable)."
+            elif status == 403 and error_code == "42501":
+                detail = (
+                    "The app cannot update saved brand records with its current database permissions. "
+                    "Run migrations/20261023_workspace_autosave_repair.sql in the database linked to the app, then retry."
+                )
             elif status == 403:
-                detail = "Supabase denied access to the workspace tables. Confirm that schema.sql has been applied and that the server-only database key has access to the tables. A publishable key cannot replace the server-only key."
+                detail = "Saved brand records are not accessible with the current storage credentials. Check the server-side storage key in hosting settings."
             elif status == 404 or error_code in {"PGRST205", "42P01"}:
                 detail = (
                     f"Supabase's Data API cannot find the workspace table public.{table}. "
@@ -372,7 +384,10 @@ class DataStore:
                     "configuration issue, not a Forma Studio username/password error."
                 )
             elif status == 400 or error_code in {"PGRST204", "42703"}:
-                detail = "The workspace database schema does not match this version of Forma Studio. Apply schema.sql and the core-messaging migration, then redeploy."
+                detail = (
+                    "This app version is missing a saved-data field in the connected database. "
+                    "Run migrations/20261023_workspace_autosave_repair.sql in the database linked to the app, then refresh."
+                )
             elif status >= 500:
                 detail = "Supabase encountered an error while loading workspace data. Check your Supabase project status and its Database/API logs."
             else:

@@ -6,7 +6,7 @@
     <nav class="app-nav" aria-label="Main navigation">
       <a class="nav-item" href="/app" ><span class="nav-marker"></span>Overview</a>
       <a class="nav-item active" href="/kits" aria-current="page"><span class="nav-marker"></span>Brand Kits <span class="nav-count">{{ kit_count }}</span></a>
-      <a class="nav-item" href="/legal"><span class="nav-marker"></span>Legal Kit</a>
+      
       
     </nav>
     <div class="sidebar-bottom"><button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>

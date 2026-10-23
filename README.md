@@ -117,3 +117,8 @@ The brand editor uses six primary tabs: Brand Definition, Brand Messaging, Brand
 Brand Components exposes Colors and Typography. The Logo editor is hidden, and previously saved logo data is preserved invisibly when a kit is saved. Existing Icons, Visuals, Videos, Resources, 3D Models, and Collaterals content is also preserved in hidden state; these types are not shown in the current component editor. Typography offers 50 curated Google Fonts families, and headline choices suggest a complementary body typeface.
 
 Cultural Lens analyzes the finalized tagline, elevator pitch, and brand story within the selected country and state/province or territory. The selected market is saved with the brand kit. Legal Kit compares only those three finalized messaging items against selected GDPR, ISO 27001, and SOC 2 Type II content themes and saves an alignment report. It does not certify or establish operational compliance. Design Review aggregates the finalized definition, messaging, colors, and typography in one preview.
+
+
+### Repairing autosave for an existing database
+
+If autosave reports that saved workspace data is unavailable, run `migrations/20261023_workspace_autosave_repair.sql` in the SQL Editor of the same database project configured in hosting. It adds the fields used by the current editor, restores server-side table grants, and refreshes the REST schema cache. Then refresh the deployed app. Application sign-in remains separate from workspace storage.

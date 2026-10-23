@@ -51,3 +51,8 @@ Brand Messaging is one primary editor tab with three sticky subtabs: Tagline, El
 ## Brand definition and component editors
 
 The editor's six primary tabs are Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review. Brand Definition omits the short-description field and uses dropdowns for Category and Primary Audience. Brand Components shows Colors and Typography. Typography uses a curated 50-family selector with recommended complementary body pairings and live font samples. The app preserves older hidden component data when the kit is saved. Cultural Lens analyzes the finalized messaging against a selected country and state/province; the selected market is saved with the kit. Design Review aggregates the final definition, messaging, palette, and typography.
+
+
+## Application typography
+
+Application UI uses a shared **Inter** body/control font and **Playfair Display** heading font, loaded in the base template so the same type system is used on public, authentication, overview, brand-kit, and Legal Kit pages. The brand editor's 50-family selector is a separate brand-identity preview feature; selected brand fonts affect the brand's type preview and should not change the surrounding application UI.
