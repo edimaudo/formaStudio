@@ -5,10 +5,11 @@ Forma Studio is a FastAPI brand design workspace for designers, agencies, and in
 ## Included
 
 - One landing page and one branded username/password login screen shared by the admin and client roles.
-- A brand-kit editor with Colors, Typography, Logos, Visuals, Videos, Icons, 3D Models, Collaterals, Resources, and Brand Story blocks.
-- Dedicated tagline and elevator-pitch fields with Gemini generation actions and saved, editable output.
+- A brand-kit editor with Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review tabs.
+- Brand Messaging has sticky Tagline, Elevator Pitch, and Brand Story tabs. Each of the first two supports manual writing or description-based drafting; the story can be reframed for cohesion without replacing the original until applied.
+- Brand Definition uses category and primary-audience dropdowns. Editor changes are saved when moving between main tabs or message tabs. Cultural Lens market selection is saved per kit.
 - A stable share URL with public, password-protected, or approved-email access.
-- A brand-linked Legal Kit that analyzes the selected brand content against GDPR, ISO 27001, and SOC 2 Type II themes. It produces one saved alignment report with framework-specific findings, recommended content changes, a saved content-alignment report. This is a content review, not legal advice, an audit, or a certification.
+- Legal Kit analyzes finalized tagline, elevator pitch, and Brand Story wording against selected GDPR, ISO 27001, and SOC 2 Type II themes. It produces one saved alignment report with framework-specific findings and recommended content changes. This is a content review, not legal advice, an operational audit, or a certification.
 - Supabase Postgres and private Storage for persistent workspace content. The app-managed username/password login is independent of Supabase Auth and of workspace tables.
 - An inert, commented-out Supabase Auth sign-in placeholder. It is not rendered or called. Optional Supabase email OTP is only used for email-restricted share flows, not for the admin/client login.
 - Optional Qloo cultural context, accessed server-side.
@@ -47,8 +48,9 @@ Supabase is the persistence layer for brand kits, uploaded assets, and Legal Kit
 4. For a new database, run `schema.sql` in the Supabase SQL Editor. This creates the workspace data tables and private asset bucket, grants API access only to the server-side `service_role`, and refreshes the Data API schema cache.
 5. If you are upgrading an existing database, run `migrations/20261018_add_core_messaging.sql` if tagline/elevator-pitch columns are missing, then `migrations/20261019_grant_service_role_access.sql` if the old owner foreign keys or Data API grants need repair.
 6. For brand-specific access-portal records, run `migrations/20261019_compliance_by_brand_kit.sql`. It links those records to the relevant brand kit. Review existing associations if an owner has several brands.
-7. Run `migrations/20261021_brand_review_reports.sql` to enable saving one brand-content alignment report, review status, and timestamped status history for each brand.
-8. Start the app and verify both accounts can sign in, create and save brand kits, and retain saved content across server restarts.
+7. Run `migrations/20261021_brand_review_reports.sql` to enable saving one brand-content alignment report and its framework scopes per brand.
+8. Run `migrations/20261023_cultural_market.sql` to persist the selected Cultural Lens country and state/province on existing brand kits.
+9. Start the app and verify both accounts can sign in, create and save brand kits, and retain saved content across server restarts.
 
 ### If the dashboard says workspace data is unavailable
 
@@ -95,7 +97,7 @@ Set `APP_ENV=production`, a random `SESSION_SECRET` of at least 32 characters, a
 python -m pytest -q
 ```
 
-The test suite checks application behavior and configuration rules, including selected-brand compliance analysis, framework selection, evidence-step persistence, and theme contrast-token ratios. It is not a penetration test, formal WCAG audit, or compliance certification.
+The test suite checks application behavior and configuration rules, including brand messaging, market selection and persistence, content-alignment reports, framework selection, and theme contrast-token ratios. It is not a penetration test, formal WCAG audit, or compliance certification.
 
 ## Accessibility review
 
@@ -110,8 +112,8 @@ The authenticated workspace intentionally has no global app header or role badge
 
 ## Current brand editor
 
-The brand editor uses five primary tabs: Brand Definition, Brand Messaging & Story, Brand Components, Cultural Lens, and Design Review. Brand Messaging & Story contains equally sized Core Messaging and Brand Story subtabs. Brand Components exposes Colors and Typography. The Logo editor is hidden on request, and previously saved logo data is preserved invisibly when a kit is saved. Existing Icons, Visuals, Videos, Resources, 3D Models, and Collaterals content is also preserved in hidden state; these types are not shown in the current component editor.
+The brand editor uses six primary tabs: Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review. The Brand Messaging tab uses sticky Tagline, Elevator Pitch, and Brand Story tabs. Tagline and Elevator Pitch each support manual writing or a generated draft based on a description; the draft is editable and must be applied before it replaces the finalized field. Brand Story starts with the user's own draft and offers an optional reframing pass that preserves the original until the user applies the result. There is no separate all-purpose copy-generation panel.
 
-Typography offers 50 curated Google Fonts families. Headline choices suggest a complementary body typeface and the live sample preview updates as choices change. The Google Fonts stylesheet is an optional browser dependency; system fallback fonts remain available if fonts cannot be fetched. Logo concepts offer wordmark, monogram, emblem, and combination previews styled using the current palette and headline font. These are concept mockups, not final vector artwork.
+Brand Components exposes Colors and Typography. The Logo editor is hidden, and previously saved logo data is preserved invisibly when a kit is saved. Existing Icons, Visuals, Videos, Resources, 3D Models, and Collaterals content is also preserved in hidden state; these types are not shown in the current component editor. Typography offers 50 curated Google Fonts families, and headline choices suggest a complementary body typeface.
 
-Cultural Lens requests country/region context and sends the saved brand positioning and story for interpretation. Regions currently cover the US states and Canadian provinces/territories.
+Cultural Lens analyzes the finalized tagline, elevator pitch, and brand story within the selected country and state/province or territory. The selected market is saved with the brand kit. Legal Kit compares only those three finalized messaging items against selected GDPR, ISO 27001, and SOC 2 Type II content themes and saves an alignment report. It does not certify or establish operational compliance. Design Review aggregates the finalized definition, messaging, colors, and typography in one preview.

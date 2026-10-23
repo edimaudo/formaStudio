@@ -514,21 +514,23 @@
         elevator_pitch: editor.querySelector('[data-field="elevator_pitch"]').value.trim(),
         industry: editor.querySelector('[data-field="industry"]').value.trim(),
         audience: editor.querySelector('[data-field="audience"]').value.trim(),
+        cultural_country: editor.querySelector('[data-field="cultural_country"]')?.value || 'Canada',
+        cultural_region: editor.querySelector('[data-field="cultural_region"]')?.value || 'Ontario',
         blocks: blockData(),
         access_mode: editor.querySelector('[data-field="access_mode"]').value,
         access_password: editor.querySelector('#access-password')?.value || '',
         allowed_emails_text: editor.querySelector('#allowed-emails')?.value || ''
       };
     }
-    async function saveKit({ quiet = false } = {}) {
+    async function saveKit({ quiet = false, auto = false } = {}) {
       if (!editor.querySelector('[data-field="name"]').value.trim()) throw new Error('Add a project name before saving.');
-      if (!quiet && feedback) feedback.textContent = 'Saving changes…';
+      if (feedback && (auto || !quiet)) feedback.textContent = 'Saving changes…';
       const result = await api(`/api/kits/${encodeURIComponent(kitId)}`, { method: 'PUT', body: kitData() });
       saved = true;
       if (shareUrl && result.share_url) shareUrl.value = result.share_url;
       const openShare = editor.querySelector('[data-open-share]');
       if (openShare && result.share_url) openShare.href = result.share_url;
-      if (feedback) feedback.textContent = quiet ? '' : 'Changes saved.';
+      if (feedback) feedback.textContent = auto ? 'Changes saved automatically.' : (quiet ? '' : 'Changes saved.');
       editor.querySelectorAll('[data-share-status]').forEach(node => node.textContent = 'Saved · link stays the same');
       editor.querySelectorAll('[data-save-kit]').forEach(button => { button.disabled = false; });
       return result;
@@ -600,9 +602,9 @@
       if (event.target.matches('[data-color-picker], [data-color-hex]')) updateColorPicker(event.target.closest('[data-color-row]'), event.target);
       if (event.target.matches('[data-field="brand_name"], [data-color-picker], [data-color-hex], [data-color-name], [data-logo-brief], [data-block-content]')) syncLogoPreviews();
       if (event.target.matches('[data-field="brand_name"]')) editor.querySelectorAll('[data-block-type="Typography"]').forEach(block => syncTypographyPreview(block));
-      if (event.target.matches('[data-field="tagline"], [data-field="elevator_pitch"], [data-field="description"]')) {
+      if (event.target.matches('[data-field="tagline"], [data-field="elevator_pitch"]')) {
         const positioning = editor.querySelector('#copy-positioning');
-        if (positioning && positioning.dataset.userEdited !== 'true') positioning.value = [editor.querySelector('[data-field="tagline"]')?.value.trim(), editor.querySelector('[data-field="elevator_pitch"]')?.value.trim(), editor.querySelector('[data-field="description"]')?.value.trim()].filter(Boolean).join('\n\n');
+        if (positioning && positioning.dataset.userEdited !== 'true') positioning.value = [editor.querySelector('[data-field="tagline"]')?.value.trim(), editor.querySelector('[data-field="elevator_pitch"]')?.value.trim()].filter(Boolean).join('\n\n');
       }
       renderFinalPreview();
     });
@@ -634,7 +636,6 @@
       const setText = (selector, text) => { const node = preview.querySelector(selector); if (node) { node.textContent = text; node.hidden = !text; } };
       const brandName = value('[data-field="brand_name"]') || value('[data-field="name"]') || 'Your brand';
       setText('[data-preview-brand]', brandName);
-      setText('[data-preview-description]', value('[data-field="description"]'));
       setText('[data-preview-tagline]', value('[data-field="tagline"]'));
       setText('[data-preview-pitch]', value('[data-field="elevator_pitch"]'));
       setText('[data-preview-industry]', value('[data-field="industry"]'));
@@ -644,7 +645,7 @@
       if (categoryWrap) categoryWrap.hidden = !value('[data-field="industry"]');
       if (audienceWrap) audienceWrap.hidden = !value('[data-field="audience"]');
       const shareBrand = editor.querySelector('[data-share-card-brand]'); if (shareBrand) shareBrand.textContent = brandName;
-      const shareDescription = editor.querySelector('[data-share-card-description]'); if (shareDescription) shareDescription.textContent = value('[data-field="description"]') || 'The identity, messaging, and resources for this brand.';
+      const shareDescription = editor.querySelector('[data-share-card-description]'); if (shareDescription) shareDescription.textContent = value('[data-field="tagline"]') || 'The identity and message for this brand.';
 
       const palette = preview.querySelector('[data-preview-palette]');
       let paletteCount = 0;
@@ -706,12 +707,11 @@
       const storySection = preview.querySelector('[data-preview-story-section]');
       if (storySection) storySection.hidden = !storyValue;
 
-      const cultureValues = value('#culture-values');
       const cultureMarket = value('#culture-market');
       const cultureResults = editor.querySelector('[data-culture-results]');
       const culturePlaceholder = cultureResults?.querySelector('.culture-placeholder');
       const generatedCulture = !culturePlaceholder ? cultureResults?.innerText?.trim() || '' : '';
-      const cultureSummary = [cultureMarket ? `Market: ${cultureMarket}` : '', cultureValues ? `Cultural territories: ${cultureValues}` : '', generatedCulture].filter(Boolean).join('\n\n');
+      const cultureSummary = [cultureMarket ? `Market: ${cultureMarket}` : '', generatedCulture].filter(Boolean).join('\n\n');
       setText('[data-preview-culture]', cultureSummary);
       const cultureSection = preview.querySelector('[data-preview-culture-section]');
       if (cultureSection) cultureSection.hidden = !cultureSummary;
@@ -764,43 +764,113 @@
     editor.querySelectorAll('[data-generate-field]').forEach(button => button.addEventListener('click', async () => {
       const target = button.dataset.generateField;
       const task = button.dataset.task;
-      const field = editor.querySelector(`[data-field="${target}"]`);
+      const output = editor.querySelector(`[data-generated-output="${target}"]`);
+      const descriptionField = editor.querySelector(`[data-generation-description="${target}"]`);
       const status = editor.querySelector(`[data-generation-status="${target}"]`);
-      if (!field) return;
-      const storyDraft = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.value.trim() || '';
-      const descriptionContext = editor.querySelector('[data-field="description"]')?.value.trim() || '';
-      const audienceContext = editor.querySelector('[data-field="audience"]')?.value.trim() || '';
-      if ([storyDraft, descriptionContext, audienceContext].join(' ').trim().length < 8) {
-        if (status) status.textContent = 'Add a brand description, audience, or story draft first.';
-        editor.querySelector('[data-field="description"]')?.focus();
+      const brief = descriptionField?.value.trim() || '';
+      if (brief.length < 8) {
+        if (status) status.textContent = 'Add a description before generating a draft.';
+        descriptionField?.focus();
         return;
       }
       const prior = button.textContent;
       setButtonLoading(button, true, 'Writing…', prior);
-      if (status) status.textContent = 'Building a draft from your brief…';
+      if (status) status.textContent = 'Building a draft from your description and brand context…';
       try {
-        const description = editor.querySelector('[data-field="description"]').value.trim();
-        const existingTagline = editor.querySelector('[data-field="tagline"]').value.trim();
-        const existingPitch = editor.querySelector('[data-field="elevator_pitch"]').value.trim();
+        const storyDraft = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.value.trim() || '';
+        const existingTagline = editor.querySelector('[data-field="tagline"]')?.value.trim() || '';
+        const existingPitch = editor.querySelector('[data-field="elevator_pitch"]')?.value.trim() || '';
         const result = await api('/api/ai/copy', { method: 'POST', body: {
           task,
           brand_name: editor.querySelector('[data-field="brand_name"]').value,
           industry: editor.querySelector('[data-field="industry"]').value,
           audience: editor.querySelector('[data-field="audience"]').value,
-          positioning: [description, audienceContext].filter(Boolean).join('\n'),
-          tone: [...editor.querySelectorAll('[data-copy-tone]:checked')].map(input => input.value).join(', ') || 'Conversational',
-          key_points: [storyDraft ? `Story draft: ${storyDraft}` : '', description, audienceContext, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : ''].filter(Boolean).join('\n').slice(0, 8000)
+          positioning: [brief, existingTagline, existingPitch, storyDraft].filter(Boolean).join('\n').slice(0, 1600),
+          tone: 'Clear, distinctive and human',
+          key_points: [brief, existingTagline ? `Current tagline: ${existingTagline}` : '', existingPitch && target !== 'elevator_pitch' ? `Current elevator pitch: ${existingPitch}` : '', storyDraft ? `Brand story context: ${storyDraft}` : ''].filter(Boolean).join('\n').slice(0, 6000)
         }});
-        field.value = result.copy;
-        renderFinalPreview();
-        if (status) status.textContent = 'Draft added. Review it, then save the kit.';
-        if (feedback) feedback.textContent = `${task} drafted. Save changes to keep it.`;
+        if (output) output.value = result.copy;
+        const applyButton = editor.querySelector(`[data-apply-generated="${target}"]`);
+        if (applyButton) applyButton.disabled = !result.copy.trim();
+        if (status) status.textContent = 'Draft ready. Review or edit it before using it.';
       } catch (error) {
         if (status) status.textContent = error.message;
       } finally {
         setButtonLoading(button, false, '', prior);
       }
     }));
+
+    editor.querySelectorAll('[data-generated-output]').forEach(output => output.addEventListener('input', () => {
+      const button = editor.querySelector(`[data-apply-generated="${output.dataset.generatedOutput}"]`);
+      if (button) button.disabled = !output.value.trim();
+    }));
+    editor.querySelectorAll('[data-apply-generated]').forEach(button => button.addEventListener('click', () => {
+      const target = button.dataset.applyGenerated;
+      const generated = editor.querySelector(`[data-generated-output="${target}"]`)?.value.trim() || '';
+      const field = editor.querySelector(`[data-field="${target}"]`);
+      if (!generated || !field) return;
+      field.value = generated;
+      renderFinalPreview();
+      const status = editor.querySelector(`[data-generation-status="${target}"]`);
+      if (status) status.textContent = 'Draft applied. It will be saved automatically when you move to another tab.';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+
+    editor.querySelectorAll('[data-message-mode]').forEach(button => button.addEventListener('click', () => {
+      const target = button.dataset.messageMode;
+      const prefix = target.startsWith('tagline-') ? 'tagline' : 'pitch';
+      editor.querySelectorAll(`[data-message-mode^="${prefix}-"]`).forEach(choice => {
+        const active = choice === button;
+        choice.classList.toggle('active', active);
+        choice.setAttribute('aria-pressed', String(active));
+      });
+      editor.querySelectorAll(`[data-message-mode-panel^="${prefix}-"]`).forEach(panel => {
+        panel.hidden = panel.dataset.messageModePanel !== target;
+      });
+    }));
+
+    const reframeButton = editor.querySelector('[data-reframe-story]');
+    reframeButton?.addEventListener('click', async () => {
+      const story = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]');
+      const draft = story?.value.trim() || '';
+      const status = editor.querySelector('[data-reframe-status]');
+      if (draft.length < 12) {
+        if (status) status.textContent = 'Write a little more of the story before asking for help reframing it.';
+        story?.focus();
+        return;
+      }
+      const prior = reframeButton.textContent;
+      setButtonLoading(reframeButton, true, 'Reframing…', prior);
+      if (status) status.textContent = 'Improving the flow while preserving your meaning…';
+      try {
+        const result = await api('/api/ai/copy', { method: 'POST', body: {
+          task: 'Reframe brand story', brand_name: editor.querySelector('[data-field="brand_name"]').value,
+          industry: editor.querySelector('[data-field="industry"]').value,
+          audience: editor.querySelector('[data-field="audience"]').value,
+          positioning: [editor.querySelector('[data-field="tagline"]')?.value, editor.querySelector('[data-field="elevator_pitch"]')?.value].filter(Boolean).join('\n'),
+          source_story_draft: draft, tone: 'Preserve the original voice; make the narrative more cohesive'
+        }});
+        const resultPanel = editor.querySelector('[data-reframed-result]');
+        const output = editor.querySelector('[data-reframed-story]');
+        if (output) output.value = result.copy;
+        if (resultPanel) resultPanel.hidden = false;
+        if (status) status.textContent = 'Reframed draft ready. Review it before applying.';
+      } catch (error) {
+        if (status) status.textContent = error.message;
+      } finally {
+        setButtonLoading(reframeButton, false, '', prior);
+      }
+    });
+    editor.querySelector('[data-apply-reframed-story]')?.addEventListener('click', () => {
+      const output = editor.querySelector('[data-reframed-story]')?.value.trim() || '';
+      const story = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]');
+      if (!output || !story) return;
+      story.value = output;
+      story.dispatchEvent(new Event('input', { bubbles: true }));
+      renderFinalPreview();
+      const status = editor.querySelector('[data-reframe-status]');
+      if (status) status.textContent = 'Reframed story applied. It will be saved automatically when you move to another tab.';
+    });
 
     editor.querySelectorAll('[data-generate-logo]').forEach(button => button.addEventListener('click', async () => {
       const block = button.closest('[data-block]');
@@ -814,7 +884,7 @@
         const result = await api('/api/ai/copy', { method: 'POST', body: {
           task: 'Logo concept recommendations', brand_name: editor.querySelector('[data-field="brand_name"]').value,
           industry: editor.querySelector('[data-field="industry"]').value, audience: editor.querySelector('[data-field="audience"]').value,
-          positioning: [editor.querySelector('[data-field="tagline"]').value, editor.querySelector('[data-field="elevator_pitch"]').value, editor.querySelector('[data-field="description"]').value].filter(Boolean).join('\n'),
+          positioning: [editor.querySelector('[data-field="tagline"]').value, editor.querySelector('[data-field="elevator_pitch"]').value].filter(Boolean).join('\n'),
           tone: block.querySelector('[data-logo-direction]:checked')?.value || 'wordmark',
           key_points: [brief, `Color palette: ${selectedColorValues().join(', ')}`, `Headline font: ${editor.querySelector('[data-block-type="Typography"] [data-typography-field="heading_font"]')?.value || 'not selected'}`, `Body font: ${editor.querySelector('[data-block-type="Typography"] [data-typography-field="body_font"]')?.value || 'not selected'}`, 'Return three distinct, usable logo concept directions that work with the supplied colors and type system.'].join('\n').slice(0, 1400)
         }});
@@ -824,66 +894,18 @@
       finally { setButtonLoading(button, false, '', prior); }
     }));
 
-    const copyButton = editor.querySelector('[data-generate-copy]');
-    const storyApplyButton = editor.querySelector('[data-copy-to-story]');
-    editor.querySelectorAll('[data-copy-type]').forEach(input => input.addEventListener('change', () => {
-      if (storyApplyButton && editor.querySelector('[data-copy-result]')?.value.trim()) {
-        storyApplyButton.disabled = ![...editor.querySelectorAll('[data-copy-type]:checked')].some(option => option.value === 'Brand story');
-      }
-    }));
-    copyButton?.addEventListener('click', async () => {
-      const status = editor.querySelector('[data-copy-status]');
-      const output = editor.querySelector('[data-copy-result]');
-      const storyDraft = editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.value.trim() || '';
-      const selectedOutputs = [...editor.querySelectorAll('[data-copy-type]:checked')].map(input => input.value);
-      const toneOptions = [...editor.querySelectorAll('[data-copy-tone]:checked')].map(input => input.value);
-      if (!selectedOutputs.length) { if (status) status.textContent = 'Select at least one type of brand copy.'; return; }
-      if (!toneOptions.length) { if (status) status.textContent = 'Select at least one tone of voice.'; return; }
-      if (storyDraft.length < 12) { if (status) status.textContent = 'Add a little more to the story draft before generating copy.'; editor.querySelector('[data-block-type="Brand Story"] [data-block-content]')?.focus(); return; }
-      const prior = copyButton.textContent;
-      setButtonLoading(copyButton, true, 'Writing…', prior);
-      if (status) status.textContent = 'Generating the selected copy from your story draft…';
-      try {
-        const description = editor.querySelector('[data-field="description"]')?.value.trim() || '';
-        const audience = editor.querySelector('[data-field="audience"]')?.value.trim() || '';
-        const result = await api('/api/ai/copy', { method: 'POST', body: {
-          task: 'Brand writing package', brand_name: editor.querySelector('[data-field="brand_name"]').value,
-          industry: editor.querySelector('[data-field="industry"]').value, audience, positioning: description,
-          tone: toneOptions.join(', '), source_story_draft: storyDraft, selected_outputs: selectedOutputs, tone_options: toneOptions
-        }});
-        output.value = result.copy;
-        if (status) status.textContent = 'Draft generated. Review and edit it before use.';
-        const applyButton = editor.querySelector('[data-copy-to-story]');
-        if (applyButton) applyButton.disabled = !selectedOutputs.includes('Brand story');
-      } catch (error) { if (status) status.textContent = error.message; }
-      finally { setButtonLoading(copyButton, false, '', prior); }
-    });
-    editor.querySelector('[data-copy-to-story]')?.addEventListener('click', async () => {
-      const copy = editor.querySelector('[data-copy-result]').value.trim();
-      if (!copy) return;
-      const story = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
-      if (!story) return;
-      const match = copy.match(/(?:^|\n)(?:#{1,3}\s*)?Brand story:?\s*\n([\s\S]*?)(?=\n(?:#{1,3}\s*)?(?:About us|Brand manifesto):?\s*\n|$)/i);
-      if (!match || !match[1].trim()) {
-        const status = editor.querySelector('[data-copy-status]');
-        if (status) status.textContent = 'No Brand story section was generated. Select Brand story and generate again.';
-        return;
-      }
-      story.querySelector('[data-block-content]').value = match[1].trim();
-      renderFinalPreview();
-      if (feedback) feedback.textContent = 'Story draft applied. Save changes to keep it.';
-      story.querySelector('[data-block-content]')?.focus({ preventScroll: true });
-    });
-    editor.querySelector('[data-copy-copy]')?.addEventListener('click', async event => {
-      const button = event.currentTarget; const original = button.textContent;
-      try { await copyText(editor.querySelector('[data-copy-result]').value); button.textContent = 'Copied'; setTimeout(() => { button.textContent = original; }, 1400); }
-      catch (error) { if (feedback) feedback.textContent = error.message; }
-    });
-
     const cultureButton = editor.querySelector('[data-get-culture]');
     cultureButton?.addEventListener('click', async () => {
-      const results = editor.querySelector('[data-culture-results]'); const prior = cultureButton.textContent;
-      setButtonLoading(cultureButton, true, 'Looking for signals…', prior);
+      const results = editor.querySelector('[data-culture-results]');
+      if (!editor.querySelector('[data-field="industry"]')?.value.trim() || !editor.querySelector('[data-field="audience"]')?.value.trim()) {
+        results.replaceChildren();
+        const message = document.createElement('p');
+        message.textContent = 'Choose a category and primary audience in Brand Definition before analyzing a market.';
+        results.append(message);
+        return;
+      }
+      const prior = cultureButton.textContent;
+      setButtonLoading(cultureButton, true, 'Analyzing messaging…', prior);
       results.replaceChildren(); const loading = document.createElement('p'); loading.textContent = 'Checking for relevant cultural signals…'; results.append(loading);
       try {
         const response = await api('/api/ai/culture', { method: 'POST', body: {
@@ -891,8 +913,8 @@
           industry: editor.querySelector('[data-field="industry"]').value,
           audience: editor.querySelector('[data-field="audience"]').value,
           market: editor.querySelector('#culture-market').value,
-          values: editor.querySelector('#culture-values').value,
-          positioning: [editor.querySelector('[data-field="tagline"]')?.value, editor.querySelector('[data-field="elevator_pitch"]')?.value, editor.querySelector('[data-field="description"]')?.value].filter(Boolean).join('\n').slice(0, 1000),
+          values: '',
+          positioning: [editor.querySelector('[data-field="tagline"]')?.value, editor.querySelector('[data-field="elevator_pitch"]')?.value].filter(Boolean).join('\n').slice(0, 1000),
           brand_story: ([...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story')?.querySelector('[data-block-content]')?.value || '').slice(0, 1800)
         }});
         results.replaceChildren();
@@ -907,9 +929,10 @@
       finally { renderFinalPreview(); setButtonLoading(cultureButton, false, '', prior); }
     });
 
-    // Section tabs switch panels in place; they do not scroll the user through one long page.
+    // Main and messaging tabs save the current state before switching panels.
     const editorTabs = [...editor.querySelectorAll('[data-editor-tab]')];
     const editorPanels = [...editor.querySelectorAll('[data-editor-panel]')];
+    let tabSwitchInProgress = false;
     function activateEditorTab(tab, focus = false) {
       const selected = tab.dataset.editorTab;
       editorTabs.forEach(item => {
@@ -921,17 +944,140 @@
       editorPanels.forEach(panel => { panel.hidden = panel.dataset.editorPanel !== selected; });
       if (focus) tab.focus();
     }
+    async function switchEditorTab(tab, focus = false) {
+      if (!tab || tabSwitchInProgress || tab.getAttribute('aria-selected') === 'true') return;
+      tabSwitchInProgress = true;
+      try {
+        await saveKit({ quiet: true, auto: true });
+        activateEditorTab(tab, focus);
+      } catch (error) {
+        if (feedback) feedback.textContent = `Auto-save failed. Staying on this tab: ${error.message}`;
+      } finally { tabSwitchInProgress = false; }
+    }
     const initialEditorTab = editorTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || editorTabs[0];
     if (initialEditorTab) activateEditorTab(initialEditorTab);
-    editorTabs.forEach(tab => tab.addEventListener('click', () => activateEditorTab(tab)));
+    const requestedTabKey = window.location.hash.replace(/^#/, '');
+    const requestedEditorTab = editorTabs.find(tab => tab.dataset.editorTab === requestedTabKey);
+    if (requestedEditorTab) activateEditorTab(requestedEditorTab);
+    editorTabs.forEach(tab => tab.addEventListener('click', () => switchEditorTab(tab)));
     editor.querySelector('[data-editor-tabs]')?.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
       const current = editorTabs.indexOf(document.activeElement);
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? editorTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + editorTabs.length) % editorTabs.length;
-      activateEditorTab(editorTabs[next], true);
+      switchEditorTab(editorTabs[next], true);
     });
 
+    const messageTabs = [...editor.querySelectorAll('[data-message-tab]')];
+    const messagePanels = [...editor.querySelectorAll('[data-message-panel]')];
+    function activateMessageTab(tab, focus = false) {
+      const selected = tab.dataset.messageTab;
+      messageTabs.forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      messagePanels.forEach(panel => { panel.hidden = panel.dataset.messagePanel !== selected; });
+      if (focus) tab.focus();
+    }
+    async function switchMessageTab(tab, focus = false) {
+      if (!tab || tab.getAttribute('aria-selected') === 'true' || tabSwitchInProgress) return;
+      tabSwitchInProgress = true;
+      try {
+        await saveKit({ quiet: true, auto: true });
+        activateMessageTab(tab, focus);
+      } catch (error) {
+        if (feedback) feedback.textContent = `Auto-save failed. Staying on this message: ${error.message}`;
+      } finally { tabSwitchInProgress = false; }
+    }
+    const initialMessageTab = messageTabs.find(tab => tab.getAttribute('aria-selected') === 'true') || messageTabs[0];
+    if (initialMessageTab) activateMessageTab(initialMessageTab);
+    messageTabs.forEach(tab => tab.addEventListener('click', () => switchMessageTab(tab)));
+    editor.querySelector('[data-message-tabs]')?.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = messageTabs.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? messageTabs.length - 1 : (Math.max(0, current) + (event.key === 'ArrowRight' ? 1 : -1) + messageTabs.length) % messageTabs.length;
+      switchMessageTab(messageTabs[next], true);
+    });
+
+    // Inline Legal Kit report uses the same guarded backend pipeline as the Legal Kit workspace page.
+    const inlineLegalButton = editor.querySelector('[data-inline-analyze-compliance]');
+    const inlineLegalPanel = editor.querySelector('[data-inline-compliance-analysis]');
+    const inlineLegalSummary = editor.querySelector('[data-inline-analysis-summary]');
+    const inlineLegalFindings = editor.querySelector('[data-inline-analysis-findings]');
+    const inlineLegalStatus = editor.querySelector('[data-inline-analysis-status]');
+    const inlineLegalPersistence = editor.querySelector('[data-inline-report-persistence]');
+    const inlineLegalChecks = [...editor.querySelectorAll('[data-inline-analysis-standard]')];
+    function updateInlineLegalSelection() {
+      const selected = inlineLegalChecks.filter(input => input.checked);
+      if (inlineLegalButton) inlineLegalButton.disabled = selected.length === 0;
+      inlineLegalChecks.forEach(input => {
+        const scope = editor.querySelector(`[data-inline-analysis-scope="${input.value}"]`);
+        if (scope) scope.disabled = !input.checked;
+      });
+    }
+    inlineLegalChecks.forEach(input => input.addEventListener('change', updateInlineLegalSelection));
+    updateInlineLegalSelection();
+    function addInlineFindingList(parent, label, items) {
+      const list = document.createElement('section'); list.className = 'analysis-finding-part';
+      const heading = document.createElement('h4'); heading.textContent = label; list.append(heading);
+      if (Array.isArray(items) && items.length) {
+        const ul = document.createElement('ul');
+        items.slice(0, 4).forEach(value => { const li = document.createElement('li'); li.textContent = String(value); ul.append(li); });
+        list.append(ul);
+      } else {
+        const empty = document.createElement('p'); empty.textContent = 'No item was identified in the supplied messaging.'; list.append(empty);
+      }
+      parent.append(list);
+    }
+    function renderInlineLegalAnalysis(analysis, report = {}) {
+      if (!inlineLegalPanel || !inlineLegalSummary || !inlineLegalFindings) return;
+      inlineLegalPanel.hidden = false;
+      inlineLegalFindings.replaceChildren();
+      inlineLegalSummary.textContent = analysis?.summary || '';
+      if (analysis?.analysis_text) {
+        const textNode = document.createElement('p'); textNode.className = 'analysis-plain-text'; textNode.textContent = analysis.analysis_text; inlineLegalFindings.append(textNode);
+      } else {
+        (Array.isArray(analysis?.standards) ? analysis.standards : []).forEach(row => {
+          const section = document.createElement('article'); section.className = 'analysis-standard-card';
+          const heading = document.createElement('h3'); heading.textContent = row.standard || 'Framework'; section.append(heading);
+          const assessment = document.createElement('p'); assessment.className = 'analysis-assessment'; assessment.textContent = row.alignment_assessment || 'Review recommended'; section.append(assessment);
+          addInlineFindingList(section, 'Aligned content', row.aligned_content);
+          addInlineFindingList(section, 'Potential issues or gaps', row.alignment_gaps);
+          addInlineFindingList(section, 'Recommended changes', row.recommended_changes);
+          inlineLegalFindings.append(section);
+        });
+      }
+      if (inlineLegalPersistence) {
+        const when = report.generated_at ? ` Generated ${new Date(report.generated_at).toLocaleString()}.` : '';
+        inlineLegalPersistence.textContent = `${report.persisted === false ? 'Report generated but was not saved.' : 'Alignment report saved.'}${when}`;
+      }
+    }
+    try {
+      const savedReport = JSON.parse(editor.querySelector('[data-inline-saved-legal-report]')?.textContent || '{}');
+      if (savedReport?.analysis && (savedReport.analysis.summary || savedReport.analysis.standards?.length || savedReport.analysis.analysis_text)) {
+        renderInlineLegalAnalysis(savedReport.analysis, savedReport);
+      }
+    } catch { /* Invalid saved report data should not break the editor. */ }
+    inlineLegalButton?.addEventListener('click', async () => {
+      const standards = inlineLegalChecks.filter(input => input.checked).map(input => input.value);
+      if (!standards.length) { updateInlineLegalSelection(); return; }
+      const scopes = Object.fromEntries(standards.map(standard => [standard, editor.querySelector(`[data-inline-analysis-scope="${standard}"]`)?.value || 'All areas']));
+      const prior = inlineLegalButton.textContent;
+      setButtonLoading(inlineLegalButton, true, 'Analyzing…', prior);
+      if (inlineLegalStatus) inlineLegalStatus.textContent = 'Reviewing your tagline, elevator pitch and brand story…';
+      try {
+        await saveKit({ quiet: true, auto: true });
+        const result = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: kitId, standards, scopes } });
+        renderInlineLegalAnalysis(result.analysis, result.report || {});
+        if (inlineLegalPersistence) inlineLegalPersistence.textContent = result.persistence_message || 'Alignment report generated.';
+        if (inlineLegalStatus) inlineLegalStatus.textContent = 'Alignment report ready.';
+      } catch (error) {
+        if (inlineLegalStatus) inlineLegalStatus.textContent = error.message;
+      } finally { setButtonLoading(inlineLegalButton, false, '', prior); updateInlineLegalSelection(); }
+    });
 
   }
 

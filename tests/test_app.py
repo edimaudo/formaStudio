@@ -198,11 +198,14 @@ def test_shared_video_includes_webvtt_track_when_configured() -> None:
     finally:
         store.update_kit("starter-kit-001", {"blocks": original_blocks})
 
-def test_generated_copy_textarea_has_an_accessible_label() -> None:
+def test_brand_messaging_draft_fields_have_accessible_labels() -> None:
     from pathlib import Path
     editor = (Path(__file__).parents[1] / "app" / "templates" / "kit_editor.html").read_text(encoding="utf-8")
-    assert '<label class="sr-only" for="copy-result">Generated copy</label>' in editor
-    assert '<textarea id="copy-result" data-copy-result' in editor
+    assert '<label for="tagline-generated-output">Generated tagline</label>' in editor
+    assert '<label for="pitch-generated-output">Generated elevator pitch</label>' in editor
+    assert '<label for="reframed-story">Reframed story</label>' in editor
+    assert 'data-generated-output="tagline"' in editor
+    assert 'data-generated-output="elevator_pitch"' in editor
 
 def test_approved_legal_request_can_reverify_without_losing_approval() -> None:
     if store.supabase_enabled:
@@ -601,27 +604,35 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     for target, label in [
         ("definition", "Brand Definition"),
-        ("messaging-story", "Brand Messaging &amp; Story"),
+        ("messaging", "Brand Messaging"),
         ("components", "Brand Components"),
         ("culture", "Cultural Lens"),
+        ("legal-kit", "Legal Kit"),
         ("design-review", "Design Review"),
     ]:
         assert f'data-editor-tab="{target}"' in editor_tabs
         assert label in editor_tabs
     assert 'id="design-review"' in html
     assert 'id="review-sharing"' not in html
-    assert 'data-editor-panel="messaging-story" hidden' in html
+    assert 'data-editor-panel="messaging" hidden' in html
     assert 'data-editor-panel="components" hidden' in html
     assert 'data-editor-panel="culture" hidden' in html
+    assert 'data-editor-panel="legal-kit" hidden' in html
     assert 'data-editor-panel="design-review" hidden' in html
-    assert 'data-messaging-tab=' not in html and 'data-messaging-panel=' not in html
-    assert 'What are you writing?' in html
-    assert 'data-copy-type value="Brand story" checked' in html
-    assert 'data-copy-type value="About us" checked' in html
-    assert 'data-copy-type value="Brand manifesto" checked' in html
-    assert 'data-copy-tone value="Professional"' in html
-    assert 'data-copy-tone value="Conversational" checked' in html
-    assert 'data-copy-tone value="Bold"' in html
+    message_tabs = html.split('<nav class="message-tabs"', 1)[1].split('</nav>', 1)[0]
+    assert 'data-message-tab="tagline"' in message_tabs
+    assert 'data-message-tab="elevator-pitch"' in message_tabs
+    assert 'data-message-tab="brand-story"' in message_tabs
+    assert 'Generate brand copy' not in html and 'Generated copy' not in html
+    assert 'data-copy-type' not in html and 'data-copy-tone' not in html
+    assert 'data-message-mode="tagline-manual"' in html
+    assert 'data-message-mode="tagline-generate"' in html
+    assert 'data-message-mode="pitch-manual"' in html
+    assert 'data-message-mode="pitch-generate"' in html
+    assert 'data-reframe-story' in html
+    assert 'data-inline-analysis-standard value="GDPR" checked' in html
+    assert 'data-inline-analysis-standard value="ISO 27001" checked' in html
+    assert 'data-inline-analysis-standard value="SOC 2 Type II" checked' in html
     assert 'data-kit-live-preview' in html
     assert "Sharing &amp; access" in html
     intro = html.split('<section class="editor-intro"', 1)[1].split('</section>', 1)[0]
@@ -641,7 +652,9 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-generation-context=' not in html
     assert 'id="kit-tagline" class="tagline-output-field"' in html
     assert 'id="kit-elevator-pitch" class="pitch-output-field"' in html
-    assert 'rows="5" maxlength="1000"' in html
+    assert 'type="hidden" id="kit-description"' in html
+    assert 'Short description' not in html
+    assert 'rows="7" maxlength="1000"' in html
     assert 'type="color"' in html
     assert 'data-typography-field="heading_font"' in html
     assert 'data-typography-field="body_font"' in html
@@ -668,15 +681,17 @@ def test_brand_story_does_not_require_an_asset_and_tabs_are_keyboard_enabled():
     editor = (root / "app/templates/kit_editor.html").read_text(encoding="utf-8")
     js = (root / "app/static/js/app.js").read_text(encoding="utf-8")
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
-    story_section = editor.split('<section id="brand-messaging-story"', 1)[1].split('<section id="brand-components"', 1)[0]
+    story_section = editor.split('<section id="brand-messaging"', 1)[1].split('<section id="brand-components"', 1)[0]
     assert 'id="story-draft"' in story_section
     assert 'data-block-file' not in story_section
     assert 'data-block-url' not in story_section
     assert 'data-block-section-tab' in editor
     assert all(key in js for key in ("ArrowLeft", "ArrowRight", "Home", "End"))
     assert 'data-editor-tab' in js
-    assert '[data-messaging-tab=\"story\"]' not in js
-    assert '.editor-tabs { top: 0; z-index: 12;' in css
+    assert 'data-message-tab' in js
+    assert 'await saveKit({ quiet: true, auto: true })' in js
+    assert '.editor-page > .editor-tabs {' in css and 'position: sticky;' in css
+    assert '.message-tabs {' in css
     assert '.block-type-tabs { position: sticky;' in css
     assert '.core-messaging-grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; }' in css
     assert '.sharing-layout { align-items: stretch; }' in css
@@ -700,6 +715,17 @@ def test_brand_level_alignment_report_and_review_history_have_schema_and_migrati
         assert field in schema
         assert f"add column if not exists {field}" in migration
     assert "notify pgrst, 'reload schema'" in migration
+
+
+def test_cultural_market_fields_have_an_upgrade_migration():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    schema = (root / "schema.sql").read_text(encoding="utf-8").lower()
+    migration = (root / "migrations/20261023_cultural_market.sql").read_text(encoding="utf-8").lower()
+    assert "cultural_country text not null default 'canada'" in schema
+    assert "cultural_region text not null default 'ontario'" in schema
+    assert "add column if not exists cultural_country" in migration
+    assert "add column if not exists cultural_region" in migration
 
 
 def test_legal_entries_are_linked_to_brand_kits_in_schema_and_migration():
@@ -896,7 +922,7 @@ def test_legal_analysis_uses_requested_brand_and_only_selected_frameworks(monkey
     assert captured["brand"] == "Northline Outdoors"
     assert captured["standards"] == ["GDPR", "ISO 27001"]
     assert captured["scopes"] == {"GDPR": "All areas", "ISO 27001": "All areas"}
-    assert all(str(entry.get("brand_kit_id")) == "starter-kit-002" for entry in captured["entries"])
+    assert captured["entries"] == []  # Content alignment must not consult unrelated Legal Kit portal entries.
 
 
 
@@ -1024,7 +1050,7 @@ def test_brand_card_compliance_is_a_prominent_button_link():
     assert 'class="button button-secondary button-small edit-kit-button"' in html
     assert 'aria-label="Edit brand kit Northline Outdoors"' in html
     assert 'class="button button-secondary button-small compliance-button"' in html
-    assert 'href="/legal?brand_kit_id=starter-kit-002"' in html
+    assert 'href="/kits/starter-kit-002#legal-kit"' in html
     assert 'aria-label="Open compliance review for Northline Outdoors"' in html
 
 
@@ -1036,18 +1062,67 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
     html = response.text
     sidebar = html.split('<aside id="workspace-sidebar"', 1)[1].split('</aside>', 1)[0]
     assert 'project-nav-name' not in sidebar
+    assert 'href="/legal"' not in sidebar
     for target in ('href="#identity"', 'href="#brand-story"', 'href="#culture"', 'href="#design-review"'):
         assert target not in sidebar
     editor_tabs = html.split('<nav class="editor-tabs"', 1)[1].split('</nav>', 1)[0]
     assert 'role="tablist"' in editor_tabs
-    for target in ('data-editor-tab="definition"', 'data-editor-tab="messaging-story"', 'data-editor-tab="components"', 'data-editor-tab="culture"', 'data-editor-tab="design-review"'):
+    for target in ('data-editor-tab="definition"', 'data-editor-tab="messaging"', 'data-editor-tab="components"', 'data-editor-tab="culture"', 'data-editor-tab="legal-kit"', 'data-editor-tab="design-review"'):
         assert target in editor_tabs
-    panels = re.findall(r'<section id="(brand-definition|brand-messaging-story|brand-components|culture|design-review)".*?>', html)
-    assert panels == ['brand-definition', 'brand-messaging-story', 'brand-components', 'culture', 'design-review']
-    assert 'id="messaging-subpanel-story"' not in html
-    assert 'data-messaging-tab=' not in html
-    assert 'data-copy-type' in html and 'data-copy-tone' in html
+    panels = re.findall(r'<section id="(brand-definition|brand-messaging|brand-components|culture|legal-kit|design-review)".*?>', html)
+    assert panels == ['brand-definition', 'brand-messaging', 'brand-components', 'culture', 'legal-kit', 'design-review']
+    assert 'data-message-tab="brand-story"' in html
+    assert 'data-copy-type' not in html and 'data-copy-tone' not in html
     assert '<h2 id="design-review-heading">Design Review</h2>' in html
+
+
+
+def test_new_brand_definition_messaging_tabs_autosave_and_inline_reports():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    definition = html.split('<section id="brand-definition"', 1)[1].split('<section id="brand-messaging"', 1)[0]
+    assert "Short description" not in definition
+    assert '<select id="kit-industry" data-field="industry"' in definition
+    assert '<select id="kit-audience" data-field="audience"' in definition
+    assert 'data-editor-tab="messaging">Brand Messaging</button>' in html
+    assert all(f'data-message-tab="{tab}"' in html for tab in ("tagline", "elevator-pitch", "brand-story"))
+    assert 'data-generation-description="tagline"' in html and 'data-generation-description="elevator_pitch"' in html
+    assert 'data-reframe-story' in html and 'data-apply-reframed-story' in html
+    assert 'Generate brand copy' not in html and 'Generated copy' not in html
+    assert 'data-inline-analyze-compliance' in html
+    assert 'data-inline-compliance-analysis' in html
+    js = (root / "app/static/js/app.js").read_text(encoding="utf-8")
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert 'async function switchEditorTab' in js and 'async function switchMessageTab' in js
+    assert 'const requestedEditorTab = editorTabs.find(tab => tab.dataset.editorTab === requestedTabKey);' in js
+    assert 'renderInlineLegalAnalysis(result.analysis' in js
+    assert 'position: sticky;' in css and 'top: 3.5rem;' in css
+
+
+def test_legal_alignment_prompt_is_limited_to_final_brand_messaging():
+    from app.main import build_legal_analysis_prompt
+    kit = {
+        "brand_name": "Northwind",
+        "tagline": "Privacy by design",
+        "elevator_pitch": "A secure collaboration product for small teams.",
+        "blocks": [
+            {"type": "Brand Story", "content": "We began by making collaboration easier without sacrificing trust."},
+            {"type": "Colors", "content": "Palette swatches: #112233"},
+            {"type": "Typography", "content": "Use serif headlines."},
+        ],
+    }
+    prompt = build_legal_analysis_prompt(kit, [], ["GDPR", "ISO 27001", "SOC 2 Type II"])
+    assert '"tagline": "Privacy by design"' in prompt
+    assert '"elevator_pitch": "A secure collaboration product for small teams."' in prompt
+    assert '"brand_story": "We began by making collaboration easier without sacrificing trust."' in prompt
+    assert 'Palette swatches' not in prompt
+    assert 'Use serif headlines' not in prompt
+    assert 'not an organization-wide audit or certification' in prompt
 
 
 def test_editor_typography_has_50_fonts_and_logo_editor_is_hidden():
@@ -1072,8 +1147,46 @@ def test_cultural_lens_uses_country_and_region_and_sends_brand_context():
     html = response.text
     js = (Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
     assert 'data-culture-country' in html and 'data-culture-region' in html
-    assert 'value="Canada"' in html and 'value="United States">USA</option>' in html
+    assert 'value="Canada" selected>Canada</option>' in html
+    assert 'value="United States" >USA</option>' in html
+    assert 'data-field="cultural_country"' in html and 'data-field="cultural_region"' in html
+    assert 'cultural_country:' in js and 'cultural_region:' in js
     assert 'brand_story:' in js and 'positioning:' in js
+
+
+def test_cultural_market_is_validated_and_saved_with_the_brand_kit():
+    from copy import deepcopy
+    from app import main as main_module
+    if main_module.store.supabase_enabled:
+        return  # This test intentionally mutates only the local in-memory store.
+    kit = main_module.store.get_kit_by_id("starter-kit-001")
+    assert kit is not None
+    original = deepcopy(kit)
+    client = TestClient(app)
+    try:
+        _sign_in(client, "studioadmin", "FormaAdmin!2026")
+        page = client.get("/kits/starter-kit-001")
+        csrf = re.search(r'window\.FORMA_CSRF="([^"]+)"', page.text).group(1)
+        payload = {
+            "name": original["name"], "brand_name": original["brand_name"],
+            "description": original.get("description", ""), "tagline": original.get("tagline", ""),
+            "elevator_pitch": original.get("elevator_pitch", ""), "industry": original.get("industry", ""),
+            "audience": original.get("audience", ""), "blocks": original.get("blocks", []),
+            "access_mode": original.get("access_mode", "public"),
+            "allowed_emails_text": "\n".join(original.get("allowed_emails", [])),
+            "cultural_country": "United States", "cultural_region": "New York",
+        }
+        saved = client.put("/api/kits/starter-kit-001", headers={"X-CSRF-Token": csrf}, json=payload)
+        assert saved.status_code == 200
+        assert kit["cultural_country"] == "United States"
+        assert kit["cultural_region"] == "New York"
+        invalid = {**payload, "cultural_country": "Canada", "cultural_region": "California"}
+        rejected = client.put("/api/kits/starter-kit-001", headers={"X-CSRF-Token": csrf}, json=invalid)
+        assert rejected.status_code == 422
+        assert "matching state or province" in rejected.json()["detail"]
+    finally:
+        kit.clear()
+        kit.update(original)
 
 
 def test_editor_actions_are_grouped_at_top_and_logo_editor_is_hidden():

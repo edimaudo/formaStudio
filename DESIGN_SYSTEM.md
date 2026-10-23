@@ -39,15 +39,15 @@ These are accessibility-minded implementation choices, not a claim of formal WCA
 
 ## Core brand messaging
 
-The brand editor includes persistent tagline and elevator-pitch fields alongside the project brief. Each field has a dedicated generation action, remains editable after generation, and is saved with the kit. Published kits display both fields when they are populated. Generated text is a draft, must be reviewed by the brand owner, and should not introduce claims unsupported by the brief.
+Brand Messaging is one primary editor tab with three sticky subtabs: Tagline, Elevator Pitch, and Brand Story. Tagline and Elevator Pitch each support writing manually or generating a draft from a description. The generated draft stays separate until explicitly applied. Brand Story is authored by the user and can be reframed for cohesion; the original is preserved until the user applies the revision. Tab changes trigger a save before navigation. Generated text must be reviewed by the brand owner and should not introduce claims unsupported by the brief.
 
 ## Workspace information architecture
 
 - **Overview** is a summary of brands already created and their publication state. It does not include brand-creation forms.
 - **Brand Kits** is the distinct management page for finding, creating, and editing kits.
-- **Legal Kit** selects a brand, assesses its content against chosen frameworks, and stores one content-alignment report. Frameworks are shown as findings inside the report, not as separate workflow cards.
+- **Legal Kit** sits beside Cultural Lens in the brand editor. It assesses only the finalized tagline, elevator pitch, and Brand Story against selected GDPR, ISO 27001, and SOC 2 Type II messaging themes and stores one alignment report. It is not an operational audit or certification. The existing cross-brand Legal Kit page remains available outside the editor.
 
 
 ## Brand definition and component editors
 
-The editor's five primary tabs are Brand Definition, Brand Messaging & Story, Brand Components, Cultural Lens, and Design Review. Brand Messaging & Story uses nested Core Messaging and Brand Story tabs. Typography uses a curated 50-family selector with recommended complementary body pairings and live font samples. Logo templates are selectable concept layouts whose previews inherit the current brand palette and headline family. Component navigation shows Colors and Typography. The Logo editor is hidden on request; previously saved logo data, as well as Icons, Visuals, Videos, Resources, 3D Models, and Collaterals blocks, is preserved in serialized hidden state when the kit is saved.
+The editor's six primary tabs are Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review. Brand Definition omits the short-description field and uses dropdowns for Category and Primary Audience. Brand Components shows Colors and Typography. Typography uses a curated 50-family selector with recommended complementary body pairings and live font samples. The app preserves older hidden component data when the kit is saved. Cultural Lens analyzes the finalized messaging against a selected country and state/province; the selected market is saved with the kit. Design Review aggregates the final definition, messaging, palette, and typography.

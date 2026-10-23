@@ -16,6 +16,8 @@ create table if not exists public.brand_kits (
   elevator_pitch text not null default '',
   industry text not null default '',
   audience text not null default '',
+  cultural_country text not null default 'Canada',
+  cultural_region text not null default 'Ontario',
   status text not null default 'draft' check (status in ('draft', 'published')),
   access_mode text not null default 'public' check (access_mode in ('public', 'password', 'email')),
   access_password_hash text,
