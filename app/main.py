@@ -864,6 +864,7 @@ def brand_kits_page(request: Request) -> Any:
     return render(request, "brand_kits.html", {
         "page_title": "Brand Kits", "kits": kits, "is_admin": user["role"] == "admin",
         "kit_count": len(kits), "workspace_error": workspace_error,
+        "brand_categories": BRAND_CATEGORIES, "brand_audiences": BRAND_AUDIENCES,
         "guided_error": guided_messages.get(guided_error_code, ""),
         "guided_form": guided_form if isinstance(guided_form, dict) else {},
     })

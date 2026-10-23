@@ -4,10 +4,8 @@
   <aside id="workspace-sidebar" class="sidebar" data-sidebar>
     <a class="wordmark sidebar-wordmark" href="/app"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a>
     <nav class="app-nav" aria-label="Main navigation">
-      <a class="nav-item" href="/app" ><span class="nav-marker"></span>Overview</a>
+      <a class="nav-item" href="/app"><span class="nav-marker"></span>Overview</a>
       <a class="nav-item active" href="/kits" aria-current="page"><span class="nav-marker"></span>Brand Kits <span class="nav-count">{{ kit_count }}</span></a>
-      
-      
     </nav>
     <div class="sidebar-bottom"><button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
   </aside>
@@ -16,66 +14,42 @@
     <div class="page-content brand-kits-page">
       <section class="page-intro"><div><h1>Brand Kits</h1></div></section>
       {% if workspace_error %}<div class="alert alert-error workspace-data-alert" role="status"><strong>Saved brand kits are temporarily unavailable.</strong><p>You can stay in the workspace, but changes cannot be saved until storage is available.</p></div>{% endif %}
-      <div class="kit-page-tabs" role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs data-default-kit-view="{{ 'create' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'existing' }}">
-        <button type="button" role="tab" id="kit-page-tab-existing" aria-controls="kit-page-panel-existing" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'true' }}" data-kit-page-tab="existing" class="{{ '' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'active' }}">Existing Brand Kits</button>
-        <button type="button" role="tab" id="kit-page-tab-create" aria-controls="kit-page-panel-create" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else 'false' }}" data-kit-page-tab="create" class="{{ 'active' if guided_error or guided_form.get('idea') or (not kits and not workspace_error) else '' }}">Create a Brand Kit</button>
+      <div class="kit-page-tabs" role="tablist" aria-label="Brand Kits sections" data-kit-page-tabs data-default-kit-view="{{ 'create' if (not kits and not workspace_error) else 'existing' }}">
+        <button type="button" role="tab" id="kit-page-tab-existing" aria-controls="kit-page-panel-existing" aria-selected="{{ 'false' if (not kits and not workspace_error) else 'true' }}" data-kit-page-tab="existing" class="{{ '' if (not kits and not workspace_error) else 'active' }}">Existing Brand Kits</button>
+        <button type="button" role="tab" id="kit-page-tab-create" aria-controls="kit-page-panel-create" aria-selected="{{ 'true' if (not kits and not workspace_error) else 'false' }}" data-kit-page-tab="create" class="{{ 'active' if (not kits and not workspace_error) else '' }}">Create a Brand Kit</button>
       </div>
-      <section id="kit-page-panel-existing" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-existing" data-kit-page-panel="existing" {% if guided_error or guided_form.get('idea') or (not kits and not workspace_error) %}hidden{% endif %}>
-      {% if kits %}
-      <section class="kits-section" aria-label="Existing brand kits">
-        <div class="section-title-row"><div><h2>Your brand kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div>
-        <div class="kit-grid" data-kit-grid>{% for kit in kits %}<article class="kit-card" data-kit-card data-search-text="{{ (kit.brand_name ~ ' ' ~ kit.name ~ ' ' ~ kit.industry)|lower }}"><div class="kit-card-top"><div class="kit-monogram">{{ (kit.brand_name or kit.name)[0]|upper }}</div><span class="status-pill {{ 'status-live' if kit.status == 'published' else 'status-draft' }}">{{ 'Published' if kit.status == 'published' else 'Draft' }}</span></div><h3>{{ kit.brand_name or kit.name }}</h3><p>{{ kit.tagline or kit.industry or 'Brand identity in progress.' }}</p><div class="kit-card-meta"><span>{{ kit.blocks|rejectattr('type', 'in', ['3D Models', 'Collaterals'])|list|length }} components</span><span>{{ kit.access_mode|capitalize }} access</span></div><div class="kit-card-footer"><a href="/kits/{{ kit.id }}" class="button button-secondary button-small edit-kit-button" aria-label="Edit brand kit {{ kit.brand_name or kit.name }}">Edit Kit</a>{% if kit.status == 'published' %}<a href="/b/{{ kit.slug }}" class="icon-text-link" target="_blank" rel="noopener">View published</a>{% endif %}<a href="/kits/{{ kit.id }}#legal-kit" class="button button-secondary button-small compliance-button" aria-label="Open compliance review for {{ kit.brand_name or kit.name }}">Compliance</a></div></article>{% endfor %}</div>
-        <p class="empty-search" data-empty-search hidden>No kits match that search.</p>
+      <section id="kit-page-panel-existing" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-existing" data-kit-page-panel="existing" {% if not kits and not workspace_error %}hidden{% endif %}>
+        {% if kits %}
+          <section class="kits-section" aria-label="Existing brand kits">
+            <div class="section-title-row"><div><h2>Your brand kits</h2></div><div class="section-title-actions"><label class="search-input-wrap"><span class="sr-only">Search brand kits</span><input type="search" placeholder="Search brand kits" data-kit-search></label></div></div>
+            <div class="kit-grid" data-kit-grid>
+              {% for kit in kits %}
+                <article class="kit-card" data-kit-card data-search-text="{{ (kit.brand_name ~ ' ' ~ kit.name ~ ' ' ~ kit.industry)|lower }}">
+                  <div class="kit-card-top"><div class="kit-monogram">{{ (kit.brand_name or kit.name)[0]|upper }}</div><span class="status-pill {{ 'status-live' if kit.status == 'published' else 'status-draft' }}">{{ 'Published' if kit.status == 'published' else 'Draft' }}</span></div>
+                  <h3>{{ kit.brand_name or kit.name }}</h3><p>{{ kit.tagline or kit.industry or 'Brand identity in progress.' }}</p>
+                  <div class="kit-card-footer"><a href="/kits/{{ kit.id }}" class="button button-secondary button-small edit-kit-button" aria-label="Edit brand kit {{ kit.brand_name or kit.name }}">Edit Kit</a>{% if kit.status == 'published' %}<a href="/b/{{ kit.slug }}" class="icon-text-link" target="_blank" rel="noopener">View published</a>{% endif %}</div>
+                </article>
+              {% endfor %}
+            </div>
+            <p class="empty-search" data-empty-search hidden>No kits match that search.</p>
+          </section>
+        {% elif not workspace_error %}<div class="empty-state brand-kits-empty"><h2>No brand kits yet</h2><p>Your existing brand kits will appear here after you create one.</p></div>{% endif %}
       </section>
-      {% elif not workspace_error %}<div class="empty-state brand-kits-empty"><h2>No brand kits yet</h2><p>Your existing brand kits will appear here after you create one.</p></div>{% endif %}
-      </section>
-      <section id="kit-page-panel-create" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-create" data-kit-page-panel="create" {% if not (guided_error or guided_form.get('idea') or (not kits and not workspace_error)) %}hidden{% endif %}>
-      <section id="create-kit" class="creation-pathways" aria-labelledby="create-heading" data-pathway-switcher data-default-path="{{ 'guided' if guided_error or guided_form.get('idea') else 'brief' }}">
-        {% if guided_error %}<div class="alert alert-error guided-create-alert" role="status">{{ guided_error }}</div>{% endif %}
-        <div class="creation-tabs" role="tablist" aria-label="Choose how to create a brand kit" data-pathway-tabs>
-          <button type="button" role="tab" id="pathway-tab-brief" aria-controls="pathway-panel-brief" aria-selected="{{ 'false' if guided_error or guided_form.get('idea') else 'true' }}" data-pathway-tab="brief" class="{{ '' if guided_error or guided_form.get('idea') else 'active' }}">I know what I want</button>
-          <button type="button" role="tab" id="pathway-tab-guided" aria-controls="pathway-panel-guided" aria-selected="{{ 'true' if guided_error or guided_form.get('idea') else 'false' }}" data-pathway-tab="guided" class="{{ 'active' if guided_error or guided_form.get('idea') else '' }}">Guided Brand Design</button>
-        </div>
-        <section class="pathway-panel" id="pathway-panel-brief" role="tabpanel" aria-labelledby="pathway-tab-brief" data-pathway-panel="brief" {% if guided_error or guided_form.get('idea') %}hidden{% endif %}>
-          <article class="pathway-card pathway-brief"><p>Start from the direction you already have. You can refine the identity, copy, and assets in the editor.</p>
+      <section id="kit-page-panel-create" class="kit-page-panel" role="tabpanel" aria-labelledby="kit-page-tab-create" data-kit-page-panel="create" {% if kits or workspace_error %}hidden{% endif %}>
+        <section id="create-kit" class="creation-pathways" aria-labelledby="create-heading">
+          <div class="section-heading-inline"><div><h2 id="create-heading">Create a Brand Kit</h2></div></div>
+          <article class="pathway-card pathway-brief">
             <form method="post" action="/kits/new" class="create-kit-form pathway-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <div><label for="new-kit-name">Project name</label><input id="new-kit-name" name="name" required maxlength="120" placeholder="e.g. Northline Outdoors"></div>
               <div><label for="new-brand-name">Brand name</label><input id="new-brand-name" name="brand_name" maxlength="120" placeholder="What should the brand be called?"></div>
-              <div class="form-two-col"><div><label for="new-industry">Category</label><input id="new-industry" name="industry" maxlength="100" placeholder="e.g. Outdoor apparel"></div><div><label for="new-audience">Primary audience</label><input id="new-audience" name="audience" maxlength="240" placeholder="Who is it for?"></div></div>
-              <button class="button button-primary pathway-submit" type="submit">Start from my brief</button>
-            </form>
-          </article>
-        </section>
-        <section class="pathway-panel" id="pathway-panel-guided" role="tabpanel" aria-labelledby="pathway-tab-guided" data-pathway-panel="guided" {% if not guided_error and not guided_form.get('idea') %}hidden{% endif %}>
-          <article class="pathway-card pathway-guided"><div class="guided-intro"><h2>Build your brand strategy</h2><p>Work through a few focused questions, review the strategic direction, then create a brand kit from the strategy you approve.</p></div>
-            <form method="post" action="/kits/guided" class="create-kit-form pathway-form guided-strategy-form" data-guided-create data-guided-stage="{{ 'review' if guided_form.get('strategy_positioning') else 'questions' }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <input type="hidden" name="project_name" id="guided-project-name" value="{{ guided_form.get('project_name', '') }}">
-              <div class="guided-question-flow" data-guided-questions {% if guided_form.get('strategy_positioning') %}hidden{% endif %}>
-                <div class="guided-progress"><div><span data-guided-step-label>Question 1 of 6</span><span data-guided-step-topic>Starting point</span></div><div class="guided-progress-track" role="progressbar" aria-label="Brand strategy questions" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" data-guided-progress><span style="width:16.67%"></span></div></div>
-                <section class="guided-question-step" data-guided-step="0"><h3>What are you building?</h3><p>Describe the product, service, or idea in your own words.</p><label class="sr-only" for="guided-idea">What are you building?</label><textarea id="guided-idea" name="idea" required rows="4" maxlength="1500" placeholder="e.g. A homeware brand that makes small-space living easier.">{{ guided_form.get('idea', '') }}</textarea></section>
-                <section class="guided-question-step" data-guided-step="1" hidden><h3>Who is it for?</h3><p>Think about the people most likely to value this offer.</p><label class="sr-only" for="guided-audience">Primary audience</label><textarea id="guided-audience" name="audience" rows="3" maxlength="300" placeholder="Who you want to reach, what matters to them, or the need they have.">{{ guided_form.get('audience', '') }}</textarea></section>
-                <section class="guided-question-step" data-guided-step="2" hidden><h3>What value should it create?</h3><p>What should people be able to do, feel, or experience because this brand exists?</p><label class="sr-only" for="guided-promise">Value proposition</label><textarea id="guided-promise" name="promise" rows="3" maxlength="700" placeholder="The useful change or experience the brand should provide.">{{ guided_form.get('promise', '') }}</textarea></section>
-                <section class="guided-question-step" data-guided-step="3" hidden><h3>What should make it different?</h3><p>Share a point of view, quality, approach, or experience that could set it apart.</p><label class="sr-only" for="guided-difference">Differentiation</label><textarea id="guided-difference" name="difference" rows="3" maxlength="700" placeholder="What could make this brand meaningfully distinct? It is fine to be unsure.">{{ guided_form.get('difference', '') }}</textarea></section>
-                <section class="guided-question-step" data-guided-step="4" hidden><h3>What should the brand feel like?</h3><p>Choose the closest starting point. You can change it later.</p><label for="guided-feeling">Brand personality</label><select id="guided-feeling" name="feeling"><option value="grounded" {{ 'selected' if guided_form.get('feeling') == 'grounded' else '' }}>Grounded</option><option value="warm" {{ 'selected' if guided_form.get('feeling', 'warm') == 'warm' else '' }}>Warm</option><option value="confident" {{ 'selected' if guided_form.get('feeling') == 'confident' else '' }}>Confident</option><option value="playful" {{ 'selected' if guided_form.get('feeling') == 'playful' else '' }}>Playful</option><option value="refined" {{ 'selected' if guided_form.get('feeling') == 'refined' else '' }}>Refined</option><option value="bold" {{ 'selected' if guided_form.get('feeling') == 'bold' else '' }}>Bold</option><option value="not sure yet" {{ 'selected' if guided_form.get('feeling', 'warm') == 'not sure yet' else '' }}>Not sure yet</option></select></section>
-                <section class="guided-question-step" data-guided-step="5" hidden><h3>How should it sound?</h3><p>This is an initial creative direction, not a fixed rule.</p><label for="guided-tone">Tone of voice</label><select id="guided-tone" name="tone"><option value="not sure yet" {{ 'selected' if guided_form.get('tone') == 'not sure yet' else '' }}>Not sure yet</option><option value="professional" {{ 'selected' if guided_form.get('tone') == 'professional' else '' }}>Professional</option><option value="conversational" {{ 'selected' if guided_form.get('tone', 'conversational') == 'conversational' else '' }}>Conversational</option><option value="bold" {{ 'selected' if guided_form.get('tone') == 'bold' else '' }}>Bold</option></select></section>
-                <div class="guided-step-actions"><button type="button" class="button button-secondary" data-guided-back disabled>Back</button><button type="button" class="button button-secondary" data-guided-next>Continue</button><button type="submit" class="button button-primary pathway-submit" data-guided-build-strategy hidden>Develop brand strategy</button></div>
+              <div class="form-two-col">
+                <div><label for="new-industry">Category</label><select id="new-industry" name="industry"><option value="">Choose a category</option>{% for category in brand_categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></div>
+                <div><label for="new-audience">Primary audience</label><select id="new-audience" name="audience"><option value="">Choose a primary audience</option>{% for audience in brand_audiences %}<option value="{{ audience }}">{{ audience }}</option>{% endfor %}</select></div>
               </div>
-              <section class="guided-strategy-review" data-guided-review {% if not guided_form.get('strategy_positioning') %}hidden{% endif %} aria-labelledby="guided-strategy-heading">
-                <div class="guided-review-heading"><div><h3 id="guided-strategy-heading">Review your brand strategy</h3><p>Adjust the proposed direction before using it to generate the brand kit.</p></div><button type="button" class="text-button" data-guided-edit-answers>Edit answers</button></div>
-                <div class="guided-review-fields">
-                  <div><label for="guided-strategy-positioning">Positioning</label><textarea id="guided-strategy-positioning" name="strategy_positioning" rows="3" maxlength="700">{{ guided_form.get('strategy_positioning', '') }}</textarea></div>
-                  <div><label for="guided-strategy-audience">Primary audience</label><textarea id="guided-strategy-audience" name="strategy_audience" rows="2" maxlength="300">{{ guided_form.get('strategy_audience', '') }}</textarea></div>
-                  <div><label for="guided-strategy-value">Value proposition</label><textarea id="guided-strategy-value" name="strategy_value_proposition" rows="3" maxlength="700">{{ guided_form.get('strategy_value_proposition', '') }}</textarea></div>
-                  <div><label for="guided-strategy-personality">Brand personality</label><textarea id="guided-strategy-personality" name="strategy_personality" rows="2" maxlength="300">{{ guided_form.get('strategy_personality', '') }}</textarea></div>
-                  <div><label for="guided-strategy-differentiation">Differentiation</label><textarea id="guided-strategy-differentiation" name="strategy_differentiation" rows="3" maxlength="700">{{ guided_form.get('strategy_differentiation', '') }}</textarea></div>
-                </div>
-                <div class="guided-final-actions"><button type="button" class="button button-secondary" data-guided-edit-answers>Revise answers</button><button type="submit" class="button button-primary pathway-submit" data-guided-create-kit>Create brand kit from strategy</button></div>
-              </section>
-              <p class="guided-status" data-guided-status role="status" aria-live="polite"></p>
+              <button class="button button-primary pathway-submit" type="submit">Create Brand Kit</button>
             </form>
           </article>
         </section>
-      </section>
       </section>
     </div>
   </main>

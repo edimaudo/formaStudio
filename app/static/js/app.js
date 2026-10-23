@@ -5,6 +5,56 @@
     set(key, value) { try { localStorage.setItem(key, value); } catch {} }
   };
 
+  function setupFrameworkDropdown(container, standardSelector, actionButton) {
+    if (!container) return { selected: () => [] };
+    const dropdown = container.querySelector('[data-framework-dropdown]');
+    const trigger = dropdown?.querySelector('[data-framework-dropdown-trigger]');
+    const menu = dropdown?.querySelector('[data-framework-dropdown-menu]');
+    const all = dropdown?.querySelector('[data-framework-all]');
+    const standards = [...(container.querySelectorAll(standardSelector) || [])];
+    const label = dropdown?.querySelector('[data-framework-selection-label]');
+    if (!dropdown || !trigger || !menu || !all) return { selected: () => standards.filter(item => item.checked).map(item => item.value) };
+
+    function close() {
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+    function update() {
+      const selected = standards.filter(item => item.checked);
+      all.checked = selected.length === standards.length;
+      all.indeterminate = selected.length > 0 && selected.length < standards.length;
+      if (actionButton) actionButton.disabled = selected.length === 0;
+      if (label) {
+        label.textContent = selected.length === standards.length ? 'All frameworks'
+          : selected.length === 0 ? 'Select frameworks'
+          : selected.length === 1 ? selected[0].value
+          : `${selected.length} frameworks selected`;
+      }
+      return selected.map(item => item.value);
+    }
+    all.addEventListener('change', () => {
+      standards.forEach(item => { item.checked = all.checked; });
+      update();
+    });
+    standards.forEach(item => item.addEventListener('change', update));
+    trigger.addEventListener('click', () => {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      trigger.setAttribute('aria-expanded', String(open));
+      if (open) menu.querySelector('input:not(:disabled)')?.focus({ preventScroll: true });
+    });
+    dropdown.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !menu.hidden) {
+        event.preventDefault(); close(); trigger.focus({ preventScroll: true });
+      }
+    });
+    document.addEventListener('click', event => {
+      if (!dropdown.contains(event.target)) close();
+    });
+    update();
+    return { selected: () => standards.filter(item => item.checked).map(item => item.value), update, close };
+  }
+
   const storedTheme = safeStorage.get('forma-theme', 'light');
   const storedFont = safeStorage.get('forma-font-size', 'medium');
   root.dataset.theme = storedTheme === 'dark' ? 'dark' : 'light';
@@ -162,138 +212,6 @@
     });
   });
 
-  document.querySelectorAll('[data-pathway-switcher]').forEach(switcher => {
-    const tabs = [...switcher.querySelectorAll('[data-pathway-tab]')];
-    const panels = [...switcher.querySelectorAll('[data-pathway-panel]')];
-    function activatePathway(name, focus = false) {
-      tabs.forEach(tab => {
-        const active = tab.dataset.pathwayTab === name;
-        tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
-      });
-      panels.forEach(panel => { panel.hidden = panel.dataset.pathwayPanel !== name; });
-      if (focus) tabs.find(tab => tab.dataset.pathwayTab === name)?.focus();
-    }
-    activatePathway(switcher.dataset.defaultPath || 'brief');
-    tabs.forEach(tab => tab.addEventListener('click', () => activatePathway(tab.dataset.pathwayTab)));
-    switcher.querySelector('[data-pathway-tabs]')?.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const focused = tabs.indexOf(document.activeElement);
-      const selected = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
-      const current = focused >= 0 ? focused : Math.max(0, selected);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-      activatePathway(tabs[next].dataset.pathwayTab, true);
-    });
-  });
-
-  document.querySelectorAll('[data-guided-create]').forEach(form => {
-    const questionFlow = form.querySelector('[data-guided-questions]');
-    const reviewPanel = form.querySelector('[data-guided-review]');
-    const steps = [...form.querySelectorAll('[data-guided-step]')];
-    const backButton = form.querySelector('[data-guided-back]');
-    const nextButton = form.querySelector('[data-guided-next]');
-    const buildStrategyButton = form.querySelector('[data-guided-build-strategy]');
-    const status = form.querySelector('[data-guided-status]');
-    const stepLabel = form.querySelector('[data-guided-step-label]');
-    const stepTopic = form.querySelector('[data-guided-step-topic]');
-    const progress = form.querySelector('[data-guided-progress]');
-    const topics = ['Starting point', 'Audience', 'Value', 'Differentiation', 'Personality', 'Voice'];
-    if (!questionFlow || !reviewPanel || !steps.length) return;
-    let currentStep = Math.max(0, steps.findIndex(step => !step.hidden));
-    const initiallyReviewing = form.dataset.guidedStage === 'review' && !reviewPanel.hidden;
-
-    function showStep(index, focus = false) {
-      currentStep = Math.max(0, Math.min(steps.length - 1, index));
-      steps.forEach((step, i) => { step.hidden = i !== currentStep; });
-      if (stepLabel) stepLabel.textContent = `Question ${currentStep + 1} of ${steps.length}`;
-      if (stepTopic) stepTopic.textContent = topics[currentStep] || 'Brand strategy';
-      if (progress) {
-        progress.setAttribute('aria-valuenow', String(currentStep + 1));
-        const fill = progress.querySelector('span');
-        if (fill) fill.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
-      }
-      if (backButton) backButton.disabled = currentStep === 0;
-      if (nextButton) nextButton.hidden = currentStep === steps.length - 1;
-      if (buildStrategyButton) buildStrategyButton.hidden = currentStep !== steps.length - 1;
-      if (focus) steps[currentStep].querySelector('textarea, input, select')?.focus();
-    }
-    function showQuestions(step = currentStep, focus = true) {
-      reviewPanel.hidden = true;
-      questionFlow.hidden = false;
-      form.dataset.guidedStage = 'questions';
-      if (status) status.textContent = '';
-      showStep(step, focus);
-    }
-    function currentStepIsValid() {
-      const control = steps[currentStep]?.querySelector('textarea, input, select');
-      if (!control) return true;
-      if (control.required && !control.value.trim()) {
-        control.reportValidity();
-        return false;
-      }
-      if (!control.checkValidity()) {
-        control.reportValidity();
-        return false;
-      }
-      return true;
-    }
-    if (initiallyReviewing) {
-      questionFlow.hidden = true;
-      reviewPanel.hidden = false;
-    } else {
-      reviewPanel.hidden = true;
-      questionFlow.hidden = false;
-      showStep(currentStep);
-    }
-    nextButton?.addEventListener('click', () => {
-      if (!currentStepIsValid()) return;
-      showStep(currentStep + 1, true);
-    });
-    backButton?.addEventListener('click', () => showStep(currentStep - 1, true));
-    form.querySelectorAll('[data-guided-edit-answers]').forEach(button => button.addEventListener('click', () => showQuestions(0, true)));
-
-    form.addEventListener('submit', async event => {
-      if (form.dataset.guidedStage === 'review' && !reviewPanel.hidden) return;
-      event.preventDefault();
-      if (!currentStepIsValid()) return;
-      if (currentStep < steps.length - 1) {
-        showStep(currentStep + 1, true);
-        return;
-      }
-      const button = buildStrategyButton;
-      const prior = button?.textContent || 'Develop brand strategy';
-      if (button) setButtonLoading(button, true, 'Developing strategy…', prior);
-      if (status) status.textContent = 'Synthesizing your answers into a proposed positioning, audience, value proposition, personality, and differentiation.';
-      try {
-        const answers = Object.fromEntries(['project_name', 'idea', 'audience', 'promise', 'difference', 'feeling', 'tone'].map(key => [key, form.querySelector(`[name="${key}"]`)?.value?.trim() || '']));
-        const response = await api('/api/ai/brand-strategy', { method: 'POST', body: answers });
-        const strategy = response.strategy || {};
-        const fields = {
-          positioning: 'strategy_positioning',
-          primary_audience: 'strategy_audience',
-          value_proposition: 'strategy_value_proposition',
-          brand_personality: 'strategy_personality',
-          differentiation: 'strategy_differentiation'
-        };
-        Object.entries(fields).forEach(([key, name]) => {
-          const input = form.querySelector(`[name="${name}"]`);
-          if (input) input.value = String(strategy[key] || '');
-        });
-        questionFlow.hidden = true;
-        reviewPanel.hidden = false;
-        form.dataset.guidedStage = 'review';
-        if (status) status.textContent = 'Strategy ready to review. Edit any field before creating the brand kit.';
-        reviewPanel.querySelector('h3')?.setAttribute('tabindex', '-1');
-        reviewPanel.querySelector('h3')?.focus({ preventScroll: true });
-      } catch (error) {
-        if (status) status.textContent = error.message;
-      } finally {
-        if (button) setButtonLoading(button, false, '', prior);
-        // The final submit button is not used while strategy review is open.
-      }
-    });
-  });
-
   document.querySelectorAll('[data-toggle-password]').forEach(button => button.addEventListener('click', () => {
     const input = document.getElementById(button.dataset.togglePassword);
     if (!input) return;
@@ -380,7 +298,7 @@
       const accentSelect = block.querySelector('[data-typography-field="accent_font"]');
       if (!headingSelect || !bodySelect) return;
       if (headingChanged && bodySelect.dataset.bodyAuto !== 'false') {
-        bodySelect.value = preferredBodyFonts[headingSelect.value] || 'Inter';
+        bodySelect.value = headingSelect.value ? (preferredBodyFonts[headingSelect.value] || 'Inter') : '';
         bodySelect.dataset.bodyAuto = 'true';
       }
       const headingFont = headingSelect.value || 'Playfair Display';
@@ -665,41 +583,25 @@
       const paletteSection = preview.querySelector('[data-preview-palette-section]');
       if (paletteSection) paletteSection.hidden = paletteCount === 0;
 
-      const blocks = preview.querySelector('[data-preview-blocks]');
-      let populatedBlockCount = 0;
-      if (blocks) {
-        blocks.replaceChildren();
-        [...editor.querySelectorAll('[data-block]')].filter(block => !['3D Models', 'Collaterals', 'Brand Story', 'Colors'].includes(block.dataset.blockType)).forEach(block => {
-          const type = block.dataset.blockType;
-          const titleText = block.querySelector('[data-block-title]')?.value?.trim() || block.querySelector('.block-card-heading h3')?.textContent?.trim() || type;
-          const details = [];
-          const content = block.querySelector('[data-block-content]')?.value?.trim() || '';
-          if (type === 'Typography') {
-            [['Heading', 'heading_font'], ['Body', 'body_font'], ['Accent', 'accent_font']].forEach(([label, key]) => { const text = block.querySelector(`[data-typography-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
-          } else if (type === 'Logos') {
-            const direction = block.querySelector('[data-logo-direction]')?.value || '';
-            const brief = block.querySelector('[data-logo-brief]')?.value.trim() || '';
-            if (direction && direction !== 'explore') details.push(`Direction: ${direction}`);
-            if (brief) details.push(brief);
-          } else if (type === 'Visuals') {
-            [['Photography', 'photography'], ['Lighting', 'lighting'], ['Texture', 'texture']].forEach(([label, key]) => { const text = block.querySelector(`[data-visual-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
-          } else if (type === 'Videos') {
-            [['Pace', 'pace'], ['Editing', 'editing']].forEach(([label, key]) => { const text = block.querySelector(`[data-motion-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
-          } else if (type === 'Icons') {
-            [['Form', 'form'], ['Density', 'density']].forEach(([label, key]) => { const text = block.querySelector(`[data-icon-field="${key}"]`)?.value.trim(); if (text) details.push(`${label}: ${text}`); });
-          }
-          if (content) details.push(content);
-          const url = block.querySelector('[data-block-url]')?.value.trim() || '';
-          if (url) details.push(`Reference: ${url}`);
-          if (!details.length) return;
-          const card = document.createElement('article'); card.dataset.previewType = type;
-          const title = document.createElement('strong'); title.textContent = titleText;
-          const paragraph = document.createElement('p'); paragraph.textContent = details.join(' · ');
-          card.append(title, paragraph); blocks.append(card); populatedBlockCount += 1;
+      const typographyBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Typography');
+      const typographyPreview = preview.querySelector('[data-preview-typography]');
+      const selectedFonts = typographyBlock ? [
+        ['Headline', typographyBlock.querySelector('[data-typography-field="heading_font"]')?.value.trim() || ''],
+        ['Body', typographyBlock.querySelector('[data-typography-field="body_font"]')?.value.trim() || ''],
+        ['Accent', typographyBlock.querySelector('[data-typography-field="accent_font"]')?.value.trim() || '']
+      ].filter(([, font]) => Boolean(font)) : [];
+      if (typographyPreview) {
+        typographyPreview.replaceChildren();
+        selectedFonts.forEach(([role, font]) => {
+          const card = document.createElement('article');
+          const title = document.createElement('strong'); title.textContent = `${role} font · ${font}`;
+          const sample = document.createElement('p'); sample.textContent = role === 'Body' ? 'Clear, consistent typography makes every message easier to read.' : 'Aa Bb Cc 123';
+          sample.style.fontFamily = `"${String(font).replace(/["'\\;]/g, '')}", sans-serif`;
+          card.append(title, sample); typographyPreview.append(card);
         });
       }
-      const componentsSection = preview.querySelector('[data-preview-components-section]');
-      if (componentsSection) componentsSection.hidden = populatedBlockCount === 0;
+      const typographySection = preview.querySelector('[data-preview-typography-section]');
+      if (typographySection) typographySection.hidden = selectedFonts.length === 0;
 
       const storyBlock = [...editor.querySelectorAll('[data-block]')].find(block => block.dataset.blockType === 'Brand Story');
       const storyValue = storyBlock?.querySelector('[data-block-content]')?.value.trim() || '';
@@ -711,13 +613,21 @@
       const cultureResults = editor.querySelector('[data-culture-results]');
       const culturePlaceholder = cultureResults?.querySelector('.culture-placeholder');
       const generatedCulture = !culturePlaceholder ? cultureResults?.innerText?.trim() || '' : '';
-      const cultureSummary = [cultureMarket ? `Market: ${cultureMarket}` : '', generatedCulture].filter(Boolean).join('\n\n');
+      const cultureSummary = generatedCulture ? [cultureMarket ? `Market: ${cultureMarket}` : '', generatedCulture].filter(Boolean).join('\n\n') : '';
       setText('[data-preview-culture]', cultureSummary);
       const cultureSection = preview.querySelector('[data-preview-culture-section]');
       if (cultureSection) cultureSection.hidden = !cultureSummary;
+
+      let savedLegalReport = {};
+      try { savedLegalReport = JSON.parse(editor.querySelector('[data-inline-saved-legal-report]')?.textContent || '{}'); } catch { savedLegalReport = {}; }
+      const legalSummary = savedLegalReport?.analysis?.summary || savedLegalReport?.analysis?.analysis_text || '';
+      setText('[data-preview-legal-summary]', legalSummary);
+      const legalSection = preview.querySelector('[data-preview-legal-section]');
+      if (legalSection) legalSection.hidden = !legalSummary;
     }
     renderFinalPreview();
     initializeTypographyAndLogos();
+    renderFinalPreview();
 
     blockList?.addEventListener('click', async event => {
       const upload = event.target.closest('[data-upload-asset], [data-upload-captions]');
@@ -1009,17 +919,7 @@
     const inlineLegalFindings = editor.querySelector('[data-inline-analysis-findings]');
     const inlineLegalStatus = editor.querySelector('[data-inline-analysis-status]');
     const inlineLegalPersistence = editor.querySelector('[data-inline-report-persistence]');
-    const inlineLegalChecks = [...editor.querySelectorAll('[data-inline-analysis-standard]')];
-    function updateInlineLegalSelection() {
-      const selected = inlineLegalChecks.filter(input => input.checked);
-      if (inlineLegalButton) inlineLegalButton.disabled = selected.length === 0;
-      inlineLegalChecks.forEach(input => {
-        const scope = editor.querySelector(`[data-inline-analysis-scope="${input.value}"]`);
-        if (scope) scope.disabled = !input.checked;
-      });
-    }
-    inlineLegalChecks.forEach(input => input.addEventListener('change', updateInlineLegalSelection));
-    updateInlineLegalSelection();
+    const inlineFrameworkDropdown = setupFrameworkDropdown(editor, '[data-inline-analysis-standard]', inlineLegalButton);
     function addInlineFindingList(parent, label, items) {
       const list = document.createElement('section'); list.className = 'analysis-finding-part';
       const heading = document.createElement('h4'); heading.textContent = label; list.append(heading);
@@ -1054,6 +954,11 @@
         const when = report.generated_at ? ` Generated ${new Date(report.generated_at).toLocaleString()}.` : '';
         inlineLegalPersistence.textContent = `${report.persisted === false ? 'Report generated but was not saved.' : 'Alignment report saved.'}${when}`;
       }
+      const previewLegalSummary = editor.querySelector('[data-preview-legal-summary]');
+      const previewLegalText = analysis?.summary || analysis?.analysis_text || '';
+      if (previewLegalSummary) previewLegalSummary.textContent = previewLegalText;
+      const previewLegalSection = editor.querySelector('[data-preview-legal-section]');
+      if (previewLegalSection) previewLegalSection.hidden = !previewLegalText;
     }
     try {
       const savedReport = JSON.parse(editor.querySelector('[data-inline-saved-legal-report]')?.textContent || '{}');
@@ -1062,9 +967,9 @@
       }
     } catch { /* Invalid saved report data should not break the editor. */ }
     inlineLegalButton?.addEventListener('click', async () => {
-      const standards = inlineLegalChecks.filter(input => input.checked).map(input => input.value);
-      if (!standards.length) { updateInlineLegalSelection(); return; }
-      const scopes = Object.fromEntries(standards.map(standard => [standard, editor.querySelector(`[data-inline-analysis-scope="${standard}"]`)?.value || 'All areas']));
+      const standards = inlineFrameworkDropdown.selected();
+      if (!standards.length) return;
+      const scopes = Object.fromEntries(standards.map(standard => [standard, 'All areas']));
       const prior = inlineLegalButton.textContent;
       setButtonLoading(inlineLegalButton, true, 'Analyzing…', prior);
       if (inlineLegalStatus) inlineLegalStatus.textContent = 'Reviewing your tagline, elevator pitch and brand story…';
@@ -1076,7 +981,7 @@
         if (inlineLegalStatus) inlineLegalStatus.textContent = 'Alignment report ready.';
       } catch (error) {
         if (inlineLegalStatus) inlineLegalStatus.textContent = error.message;
-      } finally { setButtonLoading(inlineLegalButton, false, '', prior); updateInlineLegalSelection(); }
+      } finally { setButtonLoading(inlineLegalButton, false, '', prior); }
     });
 
   }
@@ -1093,17 +998,7 @@
     const analysisStatus = legalPage.querySelector('[data-analysis-status]');
     const persistenceNote = legalPage.querySelector('[data-report-persistence-status]');
     const selectedKitId = analyzeButton?.dataset.brandKitId || '';
-    const frameworkChecks = [...legalPage.querySelectorAll('[data-analysis-standard]')];
-    function updateLegalSelectionState() {
-      const selected = frameworkChecks.filter(input => input.checked);
-      if (analyzeButton) analyzeButton.disabled = selected.length === 0;
-      frameworkChecks.forEach(input => {
-        const scope = legalPage.querySelector(`[data-analysis-scope="${input.value}"]`);
-        if (scope) scope.disabled = !input.checked;
-      });
-    }
-    frameworkChecks.forEach(input => input.addEventListener('change', updateLegalSelectionState));
-    updateLegalSelectionState();
+    const legalFrameworkDropdown = setupFrameworkDropdown(legalPage, '[data-analysis-standard]', analyzeButton);
 
     function addAnalysisList(parent, label, items) {
       if (!Array.isArray(items) || !items.length) return;
@@ -1151,7 +1046,7 @@
     }
 
     analyzeButton?.addEventListener('click', async () => {
-      const selectedStandards = [...legalPage.querySelectorAll('[data-analysis-standard]:checked')].map(input => input.value);
+      const selectedStandards = legalFrameworkDropdown.selected();
       if (!selectedStandards.length) { analysisStatus.textContent = 'Select at least one framework to analyze.'; return; }
       const prior = analyzeButton.textContent;
       analysisStatus.textContent = 'Reviewing the selected brand content…';
@@ -1160,7 +1055,7 @@
       resultFindings.replaceChildren();
       setButtonLoading(analyzeButton, true, 'Analyzing brand…', prior);
       try {
-        const scopes = Object.fromEntries(selectedStandards.map(standard => [standard, legalPage.querySelector(`[data-analysis-scope="${standard}"]`)?.value || 'All areas']));
+        const scopes = Object.fromEntries(selectedStandards.map(standard => [standard, 'All areas']));
         const response = await api('/api/legal/analyze', { method: 'POST', body: { brand_kit_id: selectedKitId, standards: selectedStandards, scopes } });
         renderLegalAnalysis(response.analysis || {});
         analysisStatus.textContent = 'Analysis complete.';
@@ -1169,7 +1064,7 @@
       } catch (error) {
         resultSummary.textContent = 'The analysis could not be completed. Check the analysis connection and try again.';
         analysisStatus.textContent = 'The analysis could not be completed.';
-      } finally { setButtonLoading(analyzeButton, false, '', prior); updateLegalSelectionState(); }
+      } finally { setButtonLoading(analyzeButton, false, '', prior); }
     });
   }
 

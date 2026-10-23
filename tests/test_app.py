@@ -565,7 +565,10 @@ def test_legal_checklist_is_scoped_to_a_selected_brand():
     assert response.status_code == 200
     assert "Northline Outdoors" in response.text
     assert "Selected brand" in response.text
-    assert "Privacy, consent and personal data" in response.text
+    assert "Frameworks" in response.text
+    assert 'data-framework-all checked' in response.text
+    assert "Privacy, consent and personal data" not in response.text
+    assert 'data-analysis-scope=' not in response.text
     assert "Review stage" not in response.text
     assert "Preview access portal" not in response.text
     assert "Preview access portal" not in response.text
@@ -667,7 +670,8 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-logo-live-preview' not in html
     assert 'data-legacy-blocks' in html
     assert 'data-preview-palette' in html
-    assert 'data-preview-blocks' in html
+    assert 'data-preview-typography' in html
+    assert 'data-preview-legal-section' in html
     # The old 3D Models/Collaterals content is preserved in a non-rendering JSON payload,
     # but is not presented as a visible editor tab.
     assert 'data-block-section-tab="3D Models"' not in html
@@ -764,27 +768,22 @@ def test_authenticated_app_shell_removes_workspace_header_and_client_badge():
         assert 'class="mobile-nav-row"' in html
 
 
-def test_brand_kits_has_two_consistent_creation_pathways_and_no_repeated_create_buttons():
+def test_brand_kits_has_a_single_create_form_with_dropdown_fields():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/kits")
     assert response.status_code == 200
     html = response.text
-    assert "I know what I want" in html
-    assert "Guided Brand Design" in html
     assert 'action="/kits/new"' in html
-    assert 'action="/kits/guided"' in html
     assert html.count('action="/kits/new"') == 1
-    assert html.count('action="/kits/guided"') == 1
-    assert "Start from my brief" in html
-    assert "Develop brand strategy" in html
-    assert "Create brand kit from strategy" in html
-    assert "Review your brand strategy" in html
-    assert "Positioning" in html and "Primary audience" in html and "Value proposition" in html
-    assert "Gemini will shape it" not in html
-    assert 'data-guided-step="0"' in html and 'data-guided-step="5"' in html
-    assert 'data-guided-create' in html
-    assert 'data-scroll-create' not in html
+    assert 'id="new-industry" name="industry"' in html and '<select id="new-industry"' in html
+    assert 'id="new-audience" name="audience"' in html and '<select id="new-audience"' in html
+    assert "Outdoor apparel" not in html
+    assert "Guided Brand Design" not in html
+    assert "I know what I want" not in html
+    assert 'data-pathway-tab' not in html
+    assert 'action="/kits/guided"' not in html
+    assert 'data-guided-create' not in html
     assert 'class="app-topbar"' not in html
 
 
@@ -831,25 +830,15 @@ def test_guided_creation_uses_generated_direction_and_opens_editor(monkeypatch):
         main_module.store.kits[:] = original_kits
 
 
-def test_guided_creation_preserves_answers_when_gemini_is_not_configured(monkeypatch):
-    from app import main as main_module
-    if main_module.store.supabase_enabled:
-        return
-    monkeypatch.setattr(main_module, "GEMINI_API_KEY", "")
+def test_guided_creation_is_removed_from_the_user_interface():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
-    page = client.get("/kits")
-    csrf = re.search(r'name="csrf_token" value="([^"]+)', page.text).group(1)
-    response = client.post("/kits/guided", data={
-        "csrf_token": csrf, "project_name": "Little Comet", "idea": "A playful learning app for young readers",
-        "audience": "Young readers", "difference": "Stories that adapt", "feeling": "Curious", "tone": "playful",
-    }, follow_redirects=False)
-    assert response.status_code == 303
-    page_after = client.get(response.headers["location"])
-    assert page_after.status_code == 200
-    assert "Guided creation is not connected right now" in page_after.text
-    assert 'value="Little Comet"' in page_after.text
-    assert "A playful learning app for young readers" in page_after.text
+    html = client.get("/kits").text
+    assert "Guided Brand Design" not in html
+    assert 'action="/kits/guided"' not in html
+    assert 'data-guided-create' not in html
+    assert 'id="new-industry" name="industry"' in html
+    assert 'id="new-audience" name="audience"' in html
 
 
 def test_legal_empty_state_offers_create_brand_kit_not_open_brand_kits(monkeypatch):
@@ -877,7 +866,7 @@ def test_brand_kits_page_uses_top_level_existing_and_create_tabs():
     assert 'data-kit-page-tab="create"' in html and '>Create a Brand Kit</button>' in html
     assert 'data-kit-page-panel="existing"' in html
     assert 'data-kit-page-panel="create"' in html
-    assert 'data-pathway-tab="brief"' in html and 'data-pathway-tab="guided"' in html
+    assert 'data-pathway-tab=' not in html and 'Guided Brand Design' not in html
     js = (__import__("pathlib").Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
     assert "activateKitPage" in js and "ArrowLeft" in js
 
@@ -889,7 +878,8 @@ def test_legal_kit_uses_framework_checkboxes_without_review_stage_or_portal_prev
     assert response.status_code == 200
     html = response.text
     assert "Northline Outdoors" in html
-    assert "Assess against" in html
+    assert "Frameworks" in html
+    assert 'data-framework-all checked' in html
     for standard in ["GDPR", "ISO 27001", "SOC 2 Type II"]:
         assert f'data-analysis-standard value="{standard}" checked' in html
     assert 'data-analyze-compliance' in html
@@ -1049,7 +1039,7 @@ def test_legal_analysis_prompt_treats_brand_assets_as_input_not_proof_of_complia
 
 
 
-def test_brand_card_compliance_is_a_prominent_button_link():
+def test_brand_kit_card_hides_low_value_metadata_and_compliance_button():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     response = client.get("/kits")
@@ -1057,9 +1047,10 @@ def test_brand_card_compliance_is_a_prominent_button_link():
     html = response.text
     assert 'class="button button-secondary button-small edit-kit-button"' in html
     assert 'aria-label="Edit brand kit Northline Outdoors"' in html
-    assert 'class="button button-secondary button-small compliance-button"' in html
-    assert 'href="/kits/starter-kit-002#legal-kit"' in html
-    assert 'aria-label="Open compliance review for Northline Outdoors"' in html
+    assert 'class="button button-secondary button-small compliance-button"' not in html
+    assert 'href="/kits/starter-kit-002#legal-kit"' not in html
+    assert "components</span>" not in html
+    assert "Private access" not in html and "Public access" not in html
 
 
 def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
@@ -1335,14 +1326,15 @@ def test_guided_creation_uses_approved_strategy_as_authoritative(monkeypatch):
         main_module.store.kits[:] = original_kits
 
 
-def test_legal_frameworks_and_scopes_start_selected_with_all_areas():
+def test_legal_framework_dropdown_defaults_to_all_without_scope_controls():
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     html = client.get("/legal?brand_kit_id=starter-kit-002").text
+    assert 'data-framework-all checked' in html
     for standard in ("GDPR", "ISO 27001", "SOC 2 Type II"):
         assert f'data-analysis-standard value="{standard}" checked' in html
-        assert f'data-analysis-scope="{standard}"' in html
-    assert html.count('value="All areas" selected') == 3
+    assert 'data-analysis-scope=' not in html
+    assert "All frameworks start selected" not in html
 
 
 def test_brand_writing_package_rejects_empty_selections_and_short_draft(monkeypatch):
@@ -1444,3 +1436,50 @@ def test_application_uses_shared_loaded_font_system():
     assert "Iowan Old Style" not in css
     assert "font-family: Georgia, serif;" not in css
     assert "font-family: Georgia, 'Times New Roman', serif;" not in css
+
+
+def test_brand_design_removes_requested_notes_and_uses_sticky_color_type_tabs():
+    from pathlib import Path
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    html = client.get("/kits/starter-kit-002").text
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert "Palette usage and contrast notes" not in html
+    assert "50 installed type families" not in html
+    assert "Section title" not in html
+    assert "Hierarchy and usage notes" not in html
+    assert 'data-preview-typography-section' in html
+    assert 'data-preview-story-section' in html
+    assert 'data-preview-culture-section' in html
+    assert 'data-preview-legal-section' in html
+    assert '.editor-page .block-type-tabs {\n  position: sticky;' in css
+    assert 'top: 3.8rem;' in css
+
+
+def test_create_brand_kit_category_and_audience_are_dropdowns_with_shared_options():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    html = client.get("/kits").text
+    assert '<select id="new-industry" name="industry">' in html
+    assert '<option value="Fashion &amp; Apparel">Fashion &amp; Apparel</option>' in html
+    assert '<select id="new-audience" name="audience">' in html
+    assert '<option value="Consumers">Consumers</option>' in html
+
+
+def test_legal_framework_selector_has_accessible_dropdown_and_all_option():
+    from pathlib import Path
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    editor_html = client.get("/kits/starter-kit-002").text
+    legal_html = client.get("/legal?brand_kit_id=starter-kit-002").text
+    js = (Path(__file__).parents[1] / "app/static/js/app.js").read_text(encoding="utf-8")
+    for html in (editor_html, legal_html):
+        assert 'data-framework-dropdown-trigger' in html
+        assert 'aria-expanded="false"' in html
+        assert 'data-framework-dropdown-menu hidden' in html
+        assert 'data-framework-all checked' in html
+        for standard in ("GDPR", "ISO 27001", "SOC 2 Type II"):
+            assert f'data-{"inline-analysis-standard" if "data-inline-analysis-standard" in html else "analysis-standard"} value="{standard}" checked' in html
+        assert 'data-analysis-scope=' not in html and 'data-inline-analysis-scope=' not in html
+    assert 'function setupFrameworkDropdown' in js
+    assert "Object.fromEntries(standards.map(standard => [standard, 'All areas']))" in js
