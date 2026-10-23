@@ -659,10 +659,15 @@
       }
     });
 
-    editor.querySelector('[data-copy-share]')?.addEventListener('click', async event => {
-      const button = event.currentTarget; const original = button.textContent;
-      try { await copyText(shareUrl.value); button.textContent = 'Copied'; setTimeout(() => { button.textContent = original; }, 1400); }
-      catch (error) { if (feedback) feedback.textContent = error.message; }
+    editor.querySelector('[data-copy-share]')?.addEventListener('click', async () => {
+      const copyFeedback = editor.querySelector('[data-copy-share-feedback]');
+      try {
+        await copyText(shareUrl?.value || '');
+        if (copyFeedback) copyFeedback.textContent = 'Brand kit link copied to clipboard.';
+      } catch (error) {
+        if (copyFeedback) copyFeedback.textContent = 'The link could not be copied. Select the URL and copy it manually.';
+        if (feedback) feedback.textContent = error.message;
+      }
     });
     editor.querySelector('[data-delete-kit]')?.addEventListener('click', async event => {
       if (!window.confirm('Delete this brand kit and its saved blocks? This cannot be undone.')) return;

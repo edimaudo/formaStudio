@@ -638,6 +638,10 @@ def test_editor_uses_real_tabs_and_combined_design_review():
     assert 'data-inline-analysis-standard value="SOC 2 Type II" checked' in html
     assert 'data-kit-live-preview' in html
     assert "Sharing &amp; access" in html
+    assert "Review the brand definition, messaging, color palette, typography, and cultural direction together." not in html
+    assert 'class="sharing-controls form-card" hidden' in html
+    assert '<span class="share-icon" aria-hidden="true">↗</span>' not in html
+    assert 'data-copy-share-feedback role="status" aria-live="polite"' in html
     intro = html.split('<section class="editor-intro"', 1)[1].split('</section>', 1)[0]
     assert 'class="button button-secondary editor-back-button"' in intro
     assert '← Back to Brand Kits' in intro
@@ -1076,6 +1080,43 @@ def test_editor_sidebar_does_not_duplicate_the_sticky_editor_tabs():
 
 
 
+def test_design_review_hides_empty_copy_access_controls_and_share_arrow():
+    client = TestClient(app)
+    _sign_in(client, "client", "FormaClient!2026")
+    response = client.get("/kits/starter-kit-002")
+    assert response.status_code == 200
+    html = response.text
+    assert "Review the brand definition, messaging, color palette, typography, and cultural direction together." not in html
+    assert "Only sections with content are shown." not in html
+    assert 'class="sharing-controls form-card" hidden' in html
+    assert '<label for="access-mode">Who can view this kit?</label>' in html  # Hidden but retained for saved-value compatibility.
+    copy = html.split('class="share-url-row"', 1)[1].split('</div>', 1)[0]
+    assert '<button type="button" class="button button-secondary" data-copy-share>Copy link</button>' in copy
+    assert '→' not in copy and '↗' not in copy and 'arrow' not in copy.lower()
+    assert 'data-preview-palette-section' in html
+    assert 'data-preview-typography-section' in html
+    assert 'data-preview-story-section' in html
+    assert 'data-preview-culture-section hidden' in html
+    assert 'data-preview-legal-section' in html
+    legal_open = re.search(r'<section data-preview-legal-section([^>]*)>', html)
+    assert legal_open is not None
+    if 'hidden' not in legal_open.group(1):
+        assert re.search(r'data-preview-legal-summary>\s*\S', html)
+
+
+def test_application_fonts_are_inter_except_inside_brand_typography_previews():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    base = (root / "app/templates/base.html").read_text(encoding="utf-8")
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    editor = (root / "app/templates/kit_editor.html").read_text(encoding="utf-8")
+    assert "family=Inter:wght@400;500;600;700" in base
+    assert "family=Playfair+Display" not in base
+    assert "--font-body: 'Inter'" in css and "--font-display: 'Inter'" in css
+    assert "style=\"font-family: '{{ block.typography.heading_font" in editor
+    assert 'data-type-preview-headline' in editor and 'data-type-preview-body' in editor
+
+
 def test_new_brand_definition_messaging_tabs_autosave_and_inline_reports():
     from pathlib import Path
     root = Path(__file__).parents[1]
@@ -1237,10 +1278,15 @@ def test_button_primary_uses_same_fill_and_foreground_in_light_and_dark_modes():
     from pathlib import Path
     css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
     assert ".button-primary {" in css
-    assert "background: #30364a;" in css
-    assert "color: #f8f9fc;" in css
-    assert "html[data-theme=\"dark\"] .button-primary,\nhtml[data-theme=\"dark\"] .button-primary:hover {\n  border-color: #30364a;\n  background: #30364a;\n  color: #f8f9fc;" in css
+    assert "--button-primary-bg: #245b49;" in css
+    assert "--button-primary-hover: #194836;" in css
+    assert "--button-primary-text: #ffffff;" in css
+    assert "background: #30364a;" not in css
+    assert 'html[data-theme="dark"] .button-primary' not in css
     assert ".button-danger {" in css
+    assert ":focus-visible { outline: 2px solid Highlight; }" in css
+    assert "@media (forced-colors: active)" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
 
 
 def test_guided_strategy_preview_returns_editable_strategy(monkeypatch):
@@ -1430,9 +1476,10 @@ def test_application_uses_shared_loaded_font_system():
     base = (root / "app" / "templates" / "base.html").read_text(encoding="utf-8")
     css = (root / "app" / "static" / "css" / "app.css").read_text(encoding="utf-8")
     assert "family=Inter:wght@400;500;600;700" in base
-    assert "family=Playfair+Display:wght@400;500;600;700" in base
+    assert "family=Playfair+Display" not in base
     assert "--font-body: 'Inter'" in css
-    assert "--font-display: 'Playfair Display'" in css
+    assert "--font-display: 'Inter'" in css
+    assert "sample.style.fontFamily" in (root / "app/static/js/app.js").read_text(encoding="utf-8")
     assert "Iowan Old Style" not in css
     assert "font-family: Georgia, serif;" not in css
     assert "font-family: Georgia, 'Times New Roman', serif;" not in css
@@ -1483,3 +1530,36 @@ def test_legal_framework_selector_has_accessible_dropdown_and_all_option():
         assert 'data-analysis-scope=' not in html and 'data-inline-analysis-scope=' not in html
     assert 'function setupFrameworkDropdown' in js
     assert "Object.fromEntries(standards.map(standard => [standard, 'All areas']))" in js
+
+
+def test_shared_theme_color_tokens_meet_sampled_wcag_aa_contrast_thresholds():
+    """Guard common text/action/control tokens, without implying full WCAG conformance."""
+    from pathlib import Path
+
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+    light_match = re.search(r":root\s*\{([^}]+)\}", css, re.S)
+    dark_match = re.search(r'html\[data-theme="dark"\]\s*\{([^}]+)\}', css, re.S)
+    assert light_match and dark_match
+
+    def tokens(block):
+        return dict(re.findall(r"(--[a-zA-Z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;", block))
+
+    def luminance(hex_color):
+        rgb = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in rgb]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    def contrast(foreground, background):
+        lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    light = tokens(light_match.group(1))
+    dark = tokens(dark_match.group(1))
+    for palette in (light, dark):
+        assert contrast(palette["--button-primary-text"], palette["--button-primary-bg"]) >= 4.5
+        assert contrast(palette["--button-primary-text"], palette["--button-primary-hover"]) >= 4.5
+        assert contrast(palette["--ink"], palette["--surface"]) >= 4.5
+        assert contrast(palette["--ink-soft"], palette["--surface"]) >= 4.5
+        assert contrast(palette["--muted"], palette["--surface"]) >= 4.5
+        assert contrast(palette["--brand"], palette["--surface"]) >= 4.5
+        assert contrast(palette["--line-strong"], palette["--surface"]) >= 3

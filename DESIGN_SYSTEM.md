@@ -4,11 +4,12 @@ Forma Studio uses one shared visual system across the public landing page, authe
 
 ## Foundations
 
-- **Display type:** a system-available editorial serif stack for headings and brand moments.
-- **Interface type:** a sans-serif stack for navigation, forms, metadata, and long-form reading.
-- **Color:** warm mineral paper and off-white surfaces; deep forest green for primary action; muted ink for text; apricot for occasional warmth. The dark theme uses slate surfaces and a lavender-blue accent rather than green; success and warning colors retain status meaning.
+- **Application type:** Inter for all application UI, including headings, navigation, forms, controls, metadata, and long-form reading.
+- **Brand typography:** fonts selected in Brand Components → Typography are confined to typography specimen previews; they do not change the surrounding Forma Studio interface.
+- **Color:** warm mineral paper and off-white surfaces; deep forest green with white text for primary actions in both themes; muted ink for text; apricot for occasional warmth. The dark theme uses slate surfaces and a lavender-blue accent for links and brand emphasis; success and warning colors retain status meaning.
 - **Spacing:** rem-based spacing with responsive `clamp()` sizing, so layout and components scale along with the selected text size.
 - **Shapes:** restrained corner radii and thin borders; no decorative eyebrow labels above headings.
+- **Buttons:** primary actions use one dark-green fill and white text in both themes; secondary actions use a surface fill and strong border; destructive actions use a restrained danger outline; quiet actions are text-first. The visual hierarchy is based on action role, not page-specific one-off styling.
 - **Components:** shared buttons, cards, form controls, status treatments, page headers, navigation, and brand-kit content blocks.
 
 ## Semantic tokens
@@ -19,7 +20,8 @@ Forma Studio uses one shared visual system across the public landing page, authe
 | `--surface` / `--surface-muted` / `--surface-raised` | Layered surfaces |
 | `--ink` / `--ink-soft` / `--muted` | Text hierarchy |
 | `--line` / `--line-strong` | Borders and separators |
-| `--brand` / `--brand-hover` / `--brand-soft` | Primary action and brand emphasis |
+| `--brand` / `--brand-hover` / `--brand-soft` | Links, selected states, and brand emphasis |
+| `--button-primary-bg` / `--button-primary-hover` / `--button-primary-text` | Theme-independent primary action style |
 | `--danger` / `--danger-bg` | Errors and destructive actions |
 | `--success` / `--success-bg` | Confirmed states |
 | `--scale` | Global interface scale |
@@ -55,4 +57,4 @@ The editor's six primary tabs are Brand Definition, Brand Messaging, Brand Compo
 
 ## Application typography
 
-Application UI uses a shared **Inter** body/control font and **Playfair Display** heading font, loaded in the base template so the same type system is used on public, authentication, overview, brand-kit, and Legal Kit pages. The brand editor's 50-family selector is a separate brand-identity preview feature; selected brand fonts affect the brand's type preview and should not change the surrounding application UI.
+All Forma Studio application UI uses **Inter**, including headings. Playfair Display remains available as one option in the brand typography specimen only; brand font selections must not change the application navigation, forms, headings, controls, or other UI.

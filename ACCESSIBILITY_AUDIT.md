@@ -1,35 +1,31 @@
 # Forma Studio accessibility review
 
-**Target:** WCAG 2.2 Level AA. This is an implementation and test record, not a claim of full conformance or certification.
+**Target:** WCAG 2.2 Level AA. This is an implementation and verification record, not a claim of full conformance or certification.
 
-## Current interface measures
+## Implemented measures
 
-- Shared layout uses a skip-to-main-content link, a focusable main target, visible focus indicators, labelled controls, and a mobile navigation drawer with `aria-expanded`, Escape-to-close, and inert/hidden closed state.
-- Appearance dialog moves focus into the dialog, contains Tab navigation, closes on Escape, and returns focus to the trigger.
-- Light and dark themes define text, surface, border, and focus tokens. Very small utility text is avoided, and content/navigation is designed to wrap or use intentional horizontal scrolling instead of forcing document-level overflow.
-- Brand Kits uses two full-width tab panels: **Existing Brand Kits** and **Create a Brand Kit**. The creation panel has a keyboard-operable nested tab set for a direct brief or Guided Brand Design.
-- The editor keeps main and Brand Messaging tabs sticky, supports keyboard tab selection, saves before tab changes, and labels generated-draft controls. Optional WebVTT caption tracks remain available for preserved video-block data.
-- Legal Kit is available beside Cultural Lens in the brand editor. It uses native, labelled framework checkboxes and scope dropdowns to generate one saved alignment report based only on tagline, elevator pitch, and brand story. At least one framework must be selected. The content review is not a legal opinion, security audit, or certification.
-- Report findings from Gemini are rendered using DOM text properties rather than inserted as HTML. The analysis prompt is restricted to the selected brand's content and selected frameworks and must not declare legal compliance or certification.
+- Application interface typography uses Inter for headings, navigation, forms, controls, and body text. Fonts selected in Brand Components → Typography are confined to explicit brand-typography specimens and the corresponding specimen samples in Design Review.
+- Light and Dark themes retain readable foreground/surface tokens. Primary action buttons use the same dark-green background and white foreground in both themes; secondary, quiet, and destructive actions have defined variants.
+- The shared layout includes a skip-to-main-content link, visible keyboard focus, labelled controls, a mobile navigation toggle with `aria-expanded`, Escape handling, and a focus-managed appearance dialog.
+- Main editor tabs and Brand Messaging tabs support keyboard selection. The editor saves before tab changes. Legal Kit framework controls are labelled and use native checkboxes.
+- Common navigation and icon buttons have improved target sizes. Focus indicators cover common custom controls, forced-colour styles are provided, and reduced-motion preferences are respected.
+- Status changes use readable text and live regions. Copy Link success/failure is announced by a polite status region.
+- Design Review combines brand definition, populated messaging, palette, typography, cultural review, and Legal Kit report content. Empty content sections are omitted. The “Who can view this kit?” access controls are temporarily hidden, while their in-DOM values are retained for save compatibility; the share URL and Copy link action remain visible.
 
 ## Checks run for this source revision
 
-- Python compilation passed.
-- JavaScript syntax validation passed.
-- `PYTHONPATH=. pytest -q`: 83 tests passed. Tests cover rendered-page semantics, tab navigation and autosave wiring, login independence, brand-scoped messaging analysis, country/region validation and persistence, report persistence, schema/migration presence, sanitized workspace errors, and existing application workflows.
-- A Chromium UI smoke check exercised main and nested tabs, mocked save requests, story reframing output, Legal Kit checkbox gating, report rendering, and a 390-pixel viewport. External browser font loading was not available in this isolated check.
-- ZIP integrity was verified before packaging.
-
-Prior revisions tested theme-token contrast (lowest sampled normal-text contrast 4.54:1 in light mode and 6.74:1 in dark mode; lowest sampled strong-boundary contrast 3.22:1 light and 4.03:1 dark) and performed 320 CSS-pixel and 200% root-font-size layout stress checks. Those checks do not replace a fresh browser audit of this revision.
+- `PYTHONPATH=. pytest -q`: **94 tests passed**.
+- Python compilation passed (`python -m compileall -q app`).
+- JavaScript syntax validation passed (`node --check app/static/js/app.js`).
+- Sampled token contrast calculations passed WCAG AA text thresholds for the current common pairs: primary-button white text on the primary and hover fills is **7.87:1** and **10.39:1**; light-theme muted text on the surface is **5.34:1**; dark-theme muted text on the surface is **7.71:1**. Sampled strong border contrasts were **3.52:1** (light) and **4.03:1** (dark). These are token samples, not a complete contrast audit of every rendered element.
+- A Chromium smoke check of the server-rendered editor and bundled CSS/JavaScript (with API responses mocked) confirmed the computed Inter body and heading stacks, consistent primary-button fill across themes, hidden access controls, no arrow on Copy link, working Design Review tab activation, visible focus outlines, and no root horizontal overflow at a 390 px viewport. External font downloads were not verified offline, and this smoke check does not replace real browser zoom/reflow, keyboard-only, screen-reader, or automated axe testing.
 
 ## Manual validation still required
 
-Do not describe the deployed application as WCAG-conformant until the deployed build is tested with keyboard-only interaction, actual browser zoom/reflow (including 400% zoom where applicable), a supported screen reader such as VoiceOver or NVDA, and an automated checker such as axe. Test success/error announcements, dialog and mobile drawer behavior, the Brand Kits nested tabs, upload controls, access-request flows, video caption accuracy, both themes, and user-supplied brand colors/assets. The local automated tests do not establish these behaviors in a deployed browser and do not certify WCAG conformance.
+Do not describe the deployed application as WCAG-conformant until the deployed build has been assessed with keyboard-only interaction, supported screen readers (such as VoiceOver or NVDA), browser zoom and reflow (including 400% zoom where applicable), and a current automated accessibility checker such as axe. Test form errors and success announcements, the appearance dialog, mobile navigation, tabsets, upload controls, both themes, and user-provided brand colours/assets. User-provided palette colours and uploaded assets can introduce contrast and alternative-text issues that cannot be guaranteed by the shared design tokens. Automated unit tests and token contrast checks do not replace these checks.
 
-## Latest brand editor controls
+## Editor and brand-content behavior
 
-The current brand editor exposes six primary tab panels: Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review. Only the selected top-level panel is displayed, and the active tab can be opened by a URL fragment. Brand Messaging has a second, keyboard-operable sticky tablist for Tagline, Elevator Pitch, and Brand Story. The component tab list exposes Colors and Typography; hidden Logos, Icons, Visuals, Videos, Resources, 3D Models, and Collaterals data is preserved on save.
+The editor has six primary panels: Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review. Brand Messaging has sticky tabs for Tagline, Elevator Pitch, and Brand Story. Brand Components exposes Colors and Typography; hidden legacy component data is preserved when saving. Design Review shows populated content and hides empty sections. The access-mode selector has been hidden from this panel temporarily; the copy/share link remains available.
 
-Typography controls use explicit labels for the 50-family headline/body/accent font selectors, a suggested complementary body pairing, and visible live sample previews. Cultural Lens includes labelled country and state/province selectors for Canada and the USA, and its selected market is saved with the kit. The analysis request includes the finalized tagline, elevator pitch, and Brand Story.
-
-Automated regression checks currently pass for these controls. This source-level review is not a formal WCAG 2.2 AA certification: manual testing with keyboard-only operation, screen readers, real browser zoom/reflow, and contrast evaluation on user-selected logo colors is still required.
+Legal Kit assesses finalized tagline, elevator pitch, and Brand Story wording against selected GDPR, ISO 27001, and SOC 2 Type II themes. It is a messaging alignment review, not a legal opinion, operational audit, or certification. Reports must not assert legal compliance or certification.
