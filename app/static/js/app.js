@@ -60,57 +60,16 @@
   root.dataset.theme = storedTheme === 'dark' ? 'dark' : 'light';
   root.dataset.fontSize = ['small', 'medium', 'large'].includes(storedFont) ? storedFont : 'medium';
 
-  const settingsPanel = document.querySelector('[data-settings-panel]');
-  const settingsBackdrop = document.querySelector('[data-settings-backdrop]');
-  const settingsOpeners = document.querySelectorAll('[data-open-settings]');
-  const closeSettingsButtons = document.querySelectorAll('[data-close-settings]');
-  let previousSettingsFocus = null;
-  let previouslyInertElements = [];
-
   document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === root.dataset.theme)));
   document.querySelectorAll('[data-font-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.fontChoice === root.dataset.fontSize)));
 
-  function openSettings(event) {
-    if (!settingsPanel || !settingsBackdrop) return;
-    previousSettingsFocus = event?.currentTarget || document.activeElement;
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    previouslyInertElements = [...document.body.children]
-      .filter(element => element !== settingsPanel && element !== settingsBackdrop)
-      .map(element => ({ element, inert: element.inert }));
-    previouslyInertElements.forEach(({ element }) => { element.inert = true; });
-    settingsOpeners.forEach(button => button.setAttribute('aria-expanded', 'true'));
-    const active = settingsPanel.querySelector(`[data-theme-choice="${root.dataset.theme}"]`);
-    (active || settingsPanel.querySelector('button, input, select, textarea, a[href]'))?.focus();
-  }
-  function closeSettings() {
-    if (!settingsPanel || !settingsBackdrop) return;
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    previouslyInertElements.forEach(({ element, inert }) => { element.inert = inert; });
-    previouslyInertElements = [];
-    settingsOpeners.forEach(button => button.setAttribute('aria-expanded', 'false'));
-    previousSettingsFocus?.focus?.();
-    previousSettingsFocus = null;
-  }
-  settingsOpeners.forEach(button => button.addEventListener('click', openSettings));
-  closeSettingsButtons.forEach(button => button.addEventListener('click', closeSettings));
-  settingsBackdrop?.addEventListener('click', closeSettings);
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && settingsPanel && !settingsPanel.hidden) { closeSettings(); return; }
     if (event.key === 'Escape' && sidebar?.classList.contains('sidebar-open') && sidebarMedia.matches) {
       sidebar.classList.remove('sidebar-open'); syncSidebarAccessibility(); sidebarToggle?.focus(); return;
     }
     if (event.key === 'Escape' && publicNav?.classList.contains('mobile-open')) {
       setPublicMenu(false); publicMenuToggle?.focus(); return;
     }
-    if (event.key !== 'Tab' || !settingsPanel || settingsPanel.hidden) return;
-    const focusable = [...settingsPanel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      .filter(item => item.getAttribute('aria-hidden') !== 'true' && item.offsetParent !== null);
-    if (!focusable.length) return;
-    const first = focusable[0], last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 
   document.querySelectorAll('[data-theme-choice]').forEach(button => {

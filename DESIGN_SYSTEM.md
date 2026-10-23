@@ -30,8 +30,8 @@ The canonical values and dark-mode overrides live in `app/static/css/app.css`; a
 
 ## Interaction and accessibility
 
-- **Appearance:** Light and Dark themes, plus Small (90%), Medium (100%, default), and Large (110%) scaling. Preferences are stored in the browser.
-- **Keyboard:** visible focus styling, native form controls, labels, and keyboard-accessible controls. Dialog behavior includes focus management.
+- **Settings:** Light and Dark themes, plus Small (90%), Medium (100%, default), and Large (110%) scaling. Preferences are stored in the browser.
+- **Keyboard:** visible focus styling, native form controls, labels, and keyboard-accessible controls. The Settings page provides the preference controls in the workspace navigation.
 - **Motion:** respects `prefers-reduced-motion`.
 - **Responsive behavior:** desktop navigation and editor layouts collapse at smaller breakpoints; controls remain usable on narrow screens.
 - **Status communication:** state changes are paired with readable text, not conveyed by color alone; asynchronous feedback uses status/live regions.

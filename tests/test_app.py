@@ -95,12 +95,13 @@ def test_ui_avoids_eyebrow_labels_and_keeps_accessible_appearance_controls() -> 
     client = TestClient(app)
     _sign_in(client, "client", "FormaClient!2026")
     dashboard = client.get("/app").text
-    assert 'data-theme-choice="light"' in dashboard
-    assert 'data-theme-choice="dark"' in dashboard
-    assert 'data-font-choice="small"' in dashboard
-    assert 'data-font-choice="medium"' in dashboard
-    assert 'data-font-choice="large"' in dashboard
     assert 'class="eyebrow"' not in dashboard
+    settings = client.get("/settings").text
+    assert 'data-theme-choice="light"' in settings
+    assert 'data-theme-choice="dark"' in settings
+    assert 'data-font-choice="small"' in settings
+    assert 'data-font-choice="medium"' in settings
+    assert 'data-font-choice="large"' in settings
 
 
 
@@ -132,7 +133,7 @@ def test_accessibility_baseline_has_contrast_tokens_and_skip_link_targets() -> N
     assert "--focus: #005fcc" in css
     assert "--focus: #ffd166" in css
     for template in templates.glob("*.html"):
-        if template.name in {"base.html", "settings_modal.html"}:
+        if template.name == "base.html":
             continue
         body = template.read_text()
         assert 'id="main-content" tabindex="-1"' in body, template.name
@@ -584,7 +585,7 @@ def test_legal_checklist_is_scoped_to_a_selected_brand():
 def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
     from pathlib import Path
     root = Path(__file__).parents[1]
-    for route in ("/app", "/kits", "/legal"):
+    for route in ("/app", "/kits", "/legal", "/settings"):
         client = TestClient(app)
         _sign_in(client, "client", "FormaClient!2026")
         response = client.get(route)
@@ -592,8 +593,10 @@ def test_workspace_chrome_removes_unneeded_avatar_chevron_and_appearance_copy():
         assert "avatar-button" not in response.text
         assert "switcher-chevrons" not in response.text
         assert "Brand systems should make good decisions easier." not in response.text
-    settings = (root / "app/templates/settings_modal.html").read_text(encoding="utf-8")
-    assert "Brand systems should make good decisions easier." not in settings
+    settings = (root / "app/templates/settings.html").read_text(encoding="utf-8")
+    assert "<h1>Settings</h1>" in settings
+    assert "data-theme-choice=\"light\"" in settings
+    assert "data-font-choice=\"medium\"" in settings
     assert "data-font-preview" not in settings
 
 
@@ -983,13 +986,41 @@ def test_legal_analysis_rejects_brand_not_accessible_to_current_user(monkeypatch
     assert response.status_code == 404
 
 
-def test_appearance_button_has_no_decorative_bullet():
+def test_settings_is_a_first_class_sidebar_section_below_brand_kits():
     from pathlib import Path
     templates = Path(__file__).parents[1] / "app/templates"
     for template_name in ["dashboard.html", "brand_kits.html", "legal.html", "kit_editor.html"]:
         html = (templates / template_name).read_text(encoding="utf-8")
-        assert '<button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button>' in html
-        assert 'sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false"><span class="nav-marker"></span>Appearance' not in html
+        nav = html.split('<nav class="app-nav"', 1)[1].split('</nav>', 1)[0]
+        assert nav.index('href="/kits"') < nav.index('href="/settings"')
+        assert '<a class="nav-item" href="/settings"><span class="nav-marker"></span>Settings</a>' in nav
+        assert 'data-open-settings' not in html
+    settings = (templates / "settings.html").read_text(encoding="utf-8")
+    assert '<a class="nav-item active" href="/settings" aria-current="page"><span class="nav-marker"></span>Settings</a>' in settings
+    assert 'data-theme-choice="light"' in settings
+    assert 'data-font-choice="large"' in settings
+
+
+def test_brand_story_and_component_editor_are_more_compact():
+    client = TestClient(app)
+    _sign_in(client, "studioadmin", "FormaAdmin!2026")
+    response = client.get("/kits/starter-kit-001")
+    assert response.status_code == 200
+    html = response.text
+    assert "Story draft" not in html
+    assert 'class="sr-only" for="story-draft">Brand story</label><textarea id="story-draft" data-block-content rows="8"' in html
+    assert "Visual identity components" not in html
+    assert "Choose a component to refine its design system." not in html
+    assert "Changes are included when you save the brand kit." not in html
+    assert 'class="block-type-label"' not in html
+    assert html.count('message-generation-layout') == 2
+    assert html.count('class="message-generation-input"') == 2
+    assert html.count('class="message-generated-result"') == 2
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert ".message-generation-layout {" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert re.search(r"\.story-block-editor textarea\[data-block-content\]\s*\{\s*min-height:\s*12rem;", css)
 
 
 def test_key_text_and_control_boundaries_meet_wcag_aa_token_contrast_targets():

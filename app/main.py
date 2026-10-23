@@ -839,6 +839,16 @@ def dashboard(request: Request) -> Any:
     })
 
 
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request) -> Any:
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login?next=/settings", status_code=303)
+    return render(request, "settings.html", {
+        "page_title": "Settings", "is_admin": user["role"] == "admin",
+    })
+
+
 @app.get("/kits", response_class=HTMLResponse)
 def brand_kits_page(request: Request) -> Any:
     user = get_current_user(request)

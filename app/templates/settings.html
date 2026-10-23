@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="app-layout">
+  <aside id="workspace-sidebar" class="sidebar" data-sidebar>
+    <a class="wordmark sidebar-wordmark" href="/app"><span class="wordmark-mark" aria-hidden="true">F</span><span>{{ app_name }}</span></a>
+    <nav class="app-nav" aria-label="Main navigation">
+      <a class="nav-item" href="/app"><span class="nav-marker"></span>Overview</a>
+      <a class="nav-item" href="/kits"><span class="nav-marker"></span>Brand Kits</a>
+      <a class="nav-item active" href="/settings" aria-current="page"><span class="nav-marker"></span>Settings</a>
+    </nav>
+    <div class="sidebar-bottom"><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form></div>
+  </aside>
+  <main id="main-content" tabindex="-1" class="app-main">
+    <div class="mobile-nav-row"><button class="mobile-menu-toggle app-mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="workspace-sidebar">Menu</button></div>
+    <div class="page-content settings-page">
+      <section class="page-intro"><div><h1>Settings</h1></div></section>
+      <section class="settings-page-panel" aria-label="Display preferences">
+        <div class="settings-group">
+          <span class="settings-label">Color theme</span>
+          <div class="segmented-control" role="group" aria-label="Color theme">
+            <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <span class="settings-label">Text and interface size</span>
+          <div class="segmented-control" role="group" aria-label="Text size">
+            <button type="button" data-font-choice="small" aria-pressed="false">Small</button>
+            <button type="button" data-font-choice="medium" aria-pressed="false">Medium</button>
+            <button type="button" data-font-choice="large" aria-pressed="false">Large</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

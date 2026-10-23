@@ -9,9 +9,9 @@
     <nav class="app-nav" aria-label="Main navigation">
       <a class="nav-item" href="/app"><span class="nav-marker"></span>Overview</a>
       <a class="nav-item active" href="/kits" aria-current="page"><span class="nav-marker"></span>Brand Kits</a>
+      <a class="nav-item" href="/settings"><span class="nav-marker"></span>Settings</a>
     </nav>
     <div class="sidebar-bottom">
-      <button class="nav-item sidebar-appearance" type="button" data-open-settings aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">Appearance</button>
       <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nav-item logout-button" type="submit">Sign out</button></form>
     </div>
   </aside>
@@ -50,23 +50,28 @@
           <div class="message-panel-heading"><p>Write a line yourself or generate a draft from a description.</p></div>
           <div class="message-mode-tabs" role="group" aria-label="Tagline writing method"><button type="button" class="active" aria-pressed="true" data-message-mode="tagline-manual">Write it yourself</button><button type="button" aria-pressed="false" data-message-mode="tagline-generate">Generate from a description</button></div>
           <div class="message-mode-panel" data-message-mode-panel="tagline-manual"><label for="kit-tagline">Your tagline</label><textarea id="kit-tagline" class="tagline-output-field" data-field="tagline" maxlength="180" rows="3" placeholder="A short, distinctive line people can remember.">{{ kit.tagline|default('', true) }}</textarea></div>
-          <div class="message-mode-panel" data-message-mode-panel="tagline-generate" hidden><label for="tagline-generation-description">Describe what the tagline should communicate</label><textarea id="tagline-generation-description" data-generation-description="tagline" rows="4" maxlength="1200" placeholder="Describe the value, personality, or idea this line should convey."></textarea><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-generate-field="tagline" data-task="Tagline">Generate tagline</button><span role="status" aria-live="polite" data-generation-status="tagline"></span></div><div class="message-generated-result"><label for="tagline-generated-output">Generated tagline</label><textarea id="tagline-generated-output" data-generated-output="tagline" rows="3" maxlength="180" placeholder="Your draft will appear here. You can edit it before using it."></textarea><button type="button" class="button button-primary" data-apply-generated="tagline" disabled>Use this tagline</button></div></div>
+          <div class="message-mode-panel message-generation-layout" data-message-mode-panel="tagline-generate" hidden>
+            <div class="message-generation-input"><label for="tagline-generation-description">Describe what the tagline should communicate</label><textarea id="tagline-generation-description" data-generation-description="tagline" rows="4" maxlength="1200" placeholder="Describe the value, personality, or idea this line should convey."></textarea><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-generate-field="tagline" data-task="Tagline">Generate tagline</button><span role="status" aria-live="polite" data-generation-status="tagline"></span></div></div>
+            <div class="message-generated-result"><label for="tagline-generated-output">Generated tagline</label><textarea id="tagline-generated-output" data-generated-output="tagline" rows="3" maxlength="180" placeholder="Your draft will appear here. You can edit it before using it."></textarea><button type="button" class="button button-primary" data-apply-generated="tagline" disabled>Use this tagline</button></div>
+          </div>
         </section>
         <section id="message-panel-elevator-pitch" class="message-panel" role="tabpanel" aria-labelledby="message-tab-elevator-pitch" data-message-panel="elevator-pitch" hidden>
           <div class="message-panel-heading"><p>Describe the offer, intended audience, and reason it matters, or build a draft from a description.</p></div>
           <div class="message-mode-tabs" role="group" aria-label="Elevator pitch writing method"><button type="button" class="active" aria-pressed="true" data-message-mode="pitch-manual">Write it yourself</button><button type="button" aria-pressed="false" data-message-mode="pitch-generate">Generate from a description</button></div>
           <div class="message-mode-panel" data-message-mode-panel="pitch-manual"><label for="kit-elevator-pitch">Your elevator pitch</label><textarea id="kit-elevator-pitch" class="pitch-output-field" data-field="elevator_pitch" rows="7" maxlength="1000" placeholder="Explain what the brand does, who it serves, and why it matters.">{{ kit.elevator_pitch|default('', true) }}</textarea></div>
-          <div class="message-mode-panel" data-message-mode-panel="pitch-generate" hidden><label for="pitch-generation-description">Describe the offer and what makes it different</label><textarea id="pitch-generation-description" data-generation-description="elevator_pitch" rows="5" maxlength="1600" placeholder="Explain the offer, the problem or need it addresses, and its meaningful difference."></textarea><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-generate-field="elevator_pitch" data-task="Elevator pitch">Generate elevator pitch</button><span role="status" aria-live="polite" data-generation-status="elevator_pitch"></span></div><div class="message-generated-result"><label for="pitch-generated-output">Generated elevator pitch</label><textarea id="pitch-generated-output" data-generated-output="elevator_pitch" rows="7" maxlength="1000" placeholder="Your draft will appear here. You can edit it before using it."></textarea><button type="button" class="button button-primary" data-apply-generated="elevator_pitch" disabled>Use this pitch</button></div></div>
+          <div class="message-mode-panel message-generation-layout" data-message-mode-panel="pitch-generate" hidden>
+            <div class="message-generation-input"><label for="pitch-generation-description">Describe the offer and what makes it different</label><textarea id="pitch-generation-description" data-generation-description="elevator_pitch" rows="5" maxlength="1600" placeholder="Explain the offer, the problem or need it addresses, and its meaningful difference."></textarea><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-generate-field="elevator_pitch" data-task="Elevator pitch">Generate elevator pitch</button><span role="status" aria-live="polite" data-generation-status="elevator_pitch"></span></div></div>
+            <div class="message-generated-result"><label for="pitch-generated-output">Generated elevator pitch</label><textarea id="pitch-generated-output" data-generated-output="elevator_pitch" rows="7" maxlength="1000" placeholder="Your draft will appear here. You can edit it before using it."></textarea><button type="button" class="button button-primary" data-apply-generated="elevator_pitch" disabled>Use this pitch</button></div>
+          </div>
         </section>
         <section id="message-panel-brand-story" class="message-panel" role="tabpanel" aria-labelledby="message-tab-brand-story" data-message-panel="brand-story" hidden>
           <div class="message-panel-heading"><p>Write the story in your own words. Writing assistance can improve cohesion while preserving your meaning.</p></div>
-          {% for block in editor_blocks if block.type == 'Brand Story' %}<article class="editable-block story-block-editor" data-block data-block-id="{{ block.id }}" data-block-type="Brand Story"><label class="block-usage-label" for="story-draft">Story draft<textarea id="story-draft" data-block-content rows="13" maxlength="8000" placeholder="Write why the brand exists, what it believes, and what you want people to remember.">{{ block.content }}</textarea></label><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-reframe-story>Help me reframe this story</button><span role="status" aria-live="polite" data-reframe-status></span></div></article>{% endfor %}
+          {% for block in editor_blocks if block.type == 'Brand Story' %}<article class="editable-block story-block-editor" data-block data-block-id="{{ block.id }}" data-block-type="Brand Story"><label class="sr-only" for="story-draft">Brand story</label><textarea id="story-draft" data-block-content rows="8" maxlength="8000" placeholder="Write why the brand exists, what it believes, and what you want people to remember.">{{ block.content }}</textarea><div class="messaging-field-actions"><button type="button" class="button button-secondary" data-reframe-story>Help me reframe this story</button><span role="status" aria-live="polite" data-reframe-status></span></div></article>{% endfor %}
           <div class="message-generated-result reframed-story-result" data-reframed-result hidden><label for="reframed-story">Reframed story</label><textarea id="reframed-story" data-reframed-story rows="13" maxlength="8000" placeholder="A revised story will appear here for review."></textarea><button type="button" class="button button-primary" data-apply-reframed-story>Use reframed story</button></div>
         </section>
       </section>
       <section id="brand-components" class="editor-section editor-section-separated" role="tabpanel" aria-labelledby="editor-tab-components" data-editor-panel="components" hidden>
         <div class="section-heading-inline"><div><h2>Brand Components</h2><p>Choose the visual building blocks that bring the identity to life.</p></div></div>
-        <div class="block-header"><div><h3>Visual identity components</h3><p>Choose a component to refine its design system.</p></div></div>
         <nav class="block-type-tabs" aria-label="Brand components" role="tablist" data-block-tabs>
           {% for type in identity_block_types %}<button type="button" role="tab" id="block-tab-{{ type|lower|replace(' ', '-') }}" aria-controls="block-panel-{{ type|lower|replace(' ', '-') }}" aria-selected="{{ 'true' if loop.first else 'false' }}" class="{{ 'active' if loop.first else '' }}" data-block-section-tab="{{ type }}">{{ type }}</button>{% endfor %}
         </nav>
@@ -75,7 +80,7 @@
           <section class="block-type-panel" id="block-panel-{{ type|lower|replace(' ', '-') }}" role="tabpanel" aria-labelledby="block-tab-{{ type|lower|replace(' ', '-') }}" data-block-panel="{{ type }}" {% if not loop.first %}hidden{% endif %}>
             {% for block in editor_blocks if block.type == type %}
             <article class="editable-block block-editor-{{ type|lower|replace(' ', '-') }}" data-block data-block-id="{{ block.id }}" data-block-type="{{ block.type }}">
-              <div class="block-card-heading"><div><span class="block-type-label">{{ type }}</span><h3>{{ block.title }}</h3></div></div>
+              <div class="block-card-heading"><div><h3>{{ block.title }}</h3></div></div>
               <input type="hidden" data-block-title value="{{ block.title }}">
               {% if type == 'Colors' %}
                 <p class="block-help">Set actual color values and see each swatch as you work.</p>
@@ -122,7 +127,6 @@
                 <label class="block-usage-label">What belongs in this resource area?<textarea data-block-content rows="5" maxlength="8000">{{ block.content }}</textarea></label><label class="block-reference-label">Resource URL<input data-block-url type="url" maxlength="1500" value="{{ block.asset_url }}" placeholder="https://..."></label>
                 <details class="asset-upload"><summary>Upload a resource file</summary><div class="asset-upload-controls"><label>Choose a resource file (15 MB max)<input data-block-file type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.zip,.docx,.pptx,.woff,.woff2,.ttf,.otf"></label><button type="button" class="button button-secondary button-small" data-upload-asset>Upload resource</button><p data-upload-feedback role="status" aria-live="polite"></p></div></details>
               {% endif %}
-              <div class="block-card-foot"><span>Changes are included when you save the brand kit.</span></div>
             </article>
             {% endfor %}
           </section>
@@ -177,5 +181,4 @@
     </div>
   </main>
 </div>
-{% include "settings_modal.html" %}
 {% endblock %}
