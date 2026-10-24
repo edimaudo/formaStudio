@@ -1,19 +1,29 @@
 # Forma Studio
 
-Forma Studio is a FastAPI brand design workspace for designers, agencies, and in-house brand teams. It brings brand strategy, ten editable brand-kit block types, controlled sharing, AI-assisted copywriting, optional cultural research, and a Legal Kit portal into one workspace.
+Forma Studio is a FastAPI brand-kit workspace for founders, designers, agencies, and in-house brand teams. It brings brand definition, core messaging, color palette, and typography into one editable kit, with optional AI assistance and review tools before a kit is published and shared. The current editor is intentionally focused on brand definition, messaging, Colors, and Typography; older asset/component data may remain in saved records but is not editable in the current interface.
 
 ## Included
 
 - One landing page and one branded username/password login screen shared by the admin and client roles.
-- A brand-kit editor with Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review tabs.
+- A brand-kit editor with Brand Definition, Brand Messaging, Brand Components, Cultural Lens, Legal Kit, and Design Review tabs, plus a separate Settings page for theme and text-size preferences.
 - Brand Messaging has sticky Tagline, Elevator Pitch, and Brand Story tabs. Each of the first two supports manual writing or description-based drafting; the story can be reframed for cohesion without replacing the original until applied.
 - Brand Definition uses category and primary-audience dropdowns. Editor changes are saved when moving between main tabs or message tabs. Cultural Lens market selection is saved per kit.
-- A stable share URL with public, password-protected, or approved-email access.
+- A stable share URL for publishing and viewing the latest saved published kit. The current editor exposes publish/unpublish and copy-link actions; password- and email-restricted access controls are hidden and should not be described as configurable in the current UI.
 - Legal Kit analyzes finalized tagline, elevator pitch, and Brand Story wording against selected GDPR, ISO 27001, and SOC 2 Type II themes. It produces one saved alignment report with framework-specific findings and recommended content changes. This is a content review, not legal advice, an operational audit, or a certification.
-- Supabase Postgres and private Storage for persistent workspace content. The app-managed username/password login is independent of Supabase Auth and of workspace tables.
+- Supabase Postgres and private Storage for persistent workspace content. The app-managed username/password login is independent of Supabase Auth and workspace tables.
 - An inert, commented-out Supabase Auth sign-in placeholder. It is not rendered or called. Optional Supabase email OTP is only used for email-restricted share flows, not for the admin/client login.
 - Optional Qloo cultural context, accessed server-side.
-- Responsive layouts, accessible focus styles, light/dark mode, and Small/Medium/Large type scaling.
+- Responsive layouts, visible focus styles, light/dark mode, and Small/Medium/Large text scaling. These accessibility-minded features do not constitute a formal WCAG conformance claim.
+
+## Current product workflow
+
+1. **Create a brand kit** from a brief or use guided AI-assisted brand direction to create an editable starting point.
+2. **Define the brand** with its name, category, and primary audience.
+3. **Develop messaging** by writing or generating a tagline and elevator pitch from a description, then editing and applying the draft. Write the Brand Story directly or optionally reframe it for cohesion.
+4. **Set visual direction** with a named hexadecimal color palette and headline/body typography pairing. The app interface uses Inter; selected brand fonts appear in the typography preview.
+5. **Review and share** populated brand content in Design Review. Cultural Lens offers contextual market signals for a selected country and state/province or territory. Legal Kit produces a messaging-alignment report for selected GDPR, ISO 27001, and SOC 2 Type II themes; it is not legal advice, a compliance audit, or certification. Publish the kit and copy its share URL.
+
+The landing page describes this same focused workflow. The current UI does not provide editable logo, icon, video, visual-asset, resource, 3D-model, or collateral libraries.
 
 ## Local setup
 
